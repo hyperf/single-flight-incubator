@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace HyperfTest\Barrier;
+namespace HyperfTest\Incubator\Cases\Barrier;
 
 use Exception;
 use Hyperf\Incubator\Barrier\BarrierManager;

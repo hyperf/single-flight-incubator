@@ -9,6 +9,9 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
+
+namespace HyperfTest\Incubator\Cases\Barrier;
+
 use Hyperf\Di\Annotation\AnnotationCollector;
 use Hyperf\Di\Aop\ProceedingJoinPoint;
 use Hyperf\Incubator\Barrier\Annotation\Barrier;
