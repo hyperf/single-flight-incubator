@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+/**
+ * This file is part of Hyperf.
+ *
+ * @link     https://www.hyperf.io
+ * @document https://hyperf.wiki
+ * @contact  group@hyperf.io
+ * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
+ */
+
+namespace Hyperf\Incubator\WorkerPool;
+
+interface TaskInterface
+{
+    public function isSync(): bool;
+
+    public function execute(): mixed;
+
+    public function setResult(mixed $ret): void;
+
+    public function waitResult(): mixed;
+}
