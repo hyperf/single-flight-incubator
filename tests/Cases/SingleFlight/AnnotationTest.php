@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+/**
+ * This file is part of Hyperf.
+ *
+ * @link     https://www.hyperf.io
+ * @document https://hyperf.wiki
+ * @contact  group@hyperf.io
+ * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
+ */
+
+namespace HyperfTest\Incubator\Cases\SingleFlight;
+
+use Hyperf\Incubator\SingleFlight\Annotation\SingleFlight;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * @internal
+ */
+#[CoversNothing]
+class AnnotationTest extends TestCase
+{
+    public function testSingleFlight()
+    {
+        $value = '#{arg1}_#{arg2}';
+        $annotation = new SingleFlight($value);
+        $this->assertSame($value, $annotation->value);
+        $this->assertSame(-1.0, $annotation->timeout);
+
+        $timeout = 1.23;
+        $annotation = new SingleFlight(timeout: $timeout);
+        $this->assertSame($timeout, $annotation->timeout);
+    }
+}
