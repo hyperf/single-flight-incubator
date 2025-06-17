@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace Hyperf\Incubator\Cases\WorkerPool;
+namespace HyperfTest\Incubator\Cases\WorkerPool;
 
 use Hyperf\Incubator\WorkerPool\Exception\RuntimeException;
 use Hyperf\Incubator\WorkerPool\Pool\Contracts\WithNodeInterface;
