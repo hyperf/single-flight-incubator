@@ -30,7 +30,8 @@
     "friendsofphp/php-cs-fixer": "^3.0",
     "hyperf/testing": "~3.1.0",
     "phpstan/phpstan": "^1.0",
-    "phpunit/phpunit": "^10.0"
+    "phpunit/phpunit": "^10.0",
+    "swoole/ide-helper": "~5.0.0"
   },
   "autoload-dev": {
     "psr-4": {
