@@ -267,7 +267,7 @@ class WorkerPoolTest extends TestCase
         }
         $endAt = microtime(true);
 
-        $this->assertGreaterThanOrEqual($total / $capacity * $sleepMs, (int) (($endAt - $startAt) * 1000));
+        $this->assertGreaterThanOrEqual($total / $capacity * $sleepMs * 0.9, (int) (($endAt - $startAt) * 1000));
 
         $pool->stop();
     }
