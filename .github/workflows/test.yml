@@ -6,6 +6,7 @@ jobs:
   tests:
     name: Test PHP ${{ matrix.php-version }} ${{ matrix.sw-version }}
     runs-on: "${{ matrix.os }}"
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [ ubuntu-latest ]
