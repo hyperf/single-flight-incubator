@@ -35,11 +35,11 @@ if (count(array_unique($ret)) === 1) {
 
 ### barrier
 ```php
-$parties = 10;
-$barrier = new CounterBarrier($parties);
-$sleepMs = 5;
+run(static function () {
+    $parties = 10;
+    $barrier = new CounterBarrier($parties);
+    $sleepMs = 5;
 
-run(static function () use ($parties, $barrier, $sleepMs) {
     for ($i = 0; $i < $parties - 1; ++$i) {
         go(static function () use ($barrier) {
             $waitAt = microtime(true);
@@ -69,8 +69,8 @@ run(static function () {
         $sleepSec = 1;
         $tokens = 1;
         defer(static function () use ($sema, $sleepSec, $tokens) {
-            $sema->release($tokens);
             printf("协程 [%d] 占用信号量 %d 秒后释放\n", Coroutine::getCid(), $sleepSec);
+            $sema->release($tokens);
         });
 
         $acquireAt = time();
@@ -86,8 +86,8 @@ run(static function () {
         $sleepSec = 2;
         $tokens = 2;
         defer(static function () use ($sema, $sleepSec, $tokens) {
-            $sema->release($tokens);
             printf("协程 [%d] 占用信号量 %d 秒后释放\n", Coroutine::getCid(), $sleepSec);
+            $sema->release($tokens);
         });
 
         $acquireAt = microtime(true);
@@ -101,14 +101,14 @@ run(static function () {
     });
 
     go(static function () use ($sema, $chan) {
-        // 确保此协程在前一个协程后尝试获取信号量
-        $chan->pop();
         $tokens = 3;
         defer(static function () use ($sema, $tokens) {
             $sema->release($tokens);
             printf("协程 [%d] 释放信号量\n", Coroutine::getCid());
         });
 
+        // 确保此协程在前一个协程后尝试获取信号量
+        $chan->pop();
         $acquireAt = time();
         $sema->acquire($tokens);
         $resumedAt = time();
@@ -138,7 +138,10 @@ run(static function () {
 
     // 投递异步任务，通过waitResult方法获取结果
     $task = new Task($mockBiz(...), sync: false);
-    $pool->submitTask($task);
+    $nullRet = $pool->submitTask($task);
+    if (is_null($nullRet)) {
+        printf("投递异步任务不会直接得到返回值\n");
+    }
     $ret = $task->waitResult();
     if (Coroutine::getCid() != $ret) {
         printf("异步任务投递到worker-pool中的工作协程执行\n");

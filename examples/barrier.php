@@ -17,11 +17,11 @@ use Swoole\Coroutine;
 use function Swoole\Coroutine\go;
 use function Swoole\Coroutine\run;
 
-$parties = 10;
-$barrier = new CounterBarrier($parties);
-$sleepMs = 5;
+run(static function () {
+    $parties = 10;
+    $barrier = new CounterBarrier($parties);
+    $sleepMs = 5;
 
-run(static function () use ($parties, $barrier, $sleepMs) {
     for ($i = 0; $i < $parties - 1; ++$i) {
         go(static function () use ($barrier) {
             $waitAt = microtime(true);

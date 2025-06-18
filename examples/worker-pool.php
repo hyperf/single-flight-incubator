@@ -37,7 +37,10 @@ run(static function () {
 
     // 投递异步任务，通过waitResult方法获取结果
     $task = new Task($mockBiz(...), sync: false);
-    $pool->submitTask($task);
+    $nullRet = $pool->submitTask($task);
+    if (is_null($nullRet)) {
+        printf("投递异步任务不会直接得到返回值\n");
+    }
     $ret = $task->waitResult();
     if (Coroutine::getCid() != $ret) {
         printf("异步任务投递到worker-pool中的工作协程执行\n");

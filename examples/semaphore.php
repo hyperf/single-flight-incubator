@@ -26,8 +26,8 @@ run(static function () {
         $sleepSec = 1;
         $tokens = 1;
         defer(static function () use ($sema, $sleepSec, $tokens) {
-            $sema->release($tokens);
             printf("协程 [%d] 占用信号量 %d 秒后释放\n", Coroutine::getCid(), $sleepSec);
+            $sema->release($tokens);
         });
 
         $acquireAt = time();
@@ -43,8 +43,8 @@ run(static function () {
         $sleepSec = 2;
         $tokens = 2;
         defer(static function () use ($sema, $sleepSec, $tokens) {
-            $sema->release($tokens);
             printf("协程 [%d] 占用信号量 %d 秒后释放\n", Coroutine::getCid(), $sleepSec);
+            $sema->release($tokens);
         });
 
         $acquireAt = microtime(true);
@@ -58,14 +58,14 @@ run(static function () {
     });
 
     go(static function () use ($sema, $chan) {
-        // 确保此协程在前一个协程后尝试获取信号量
-        $chan->pop();
         $tokens = 3;
         defer(static function () use ($sema, $tokens) {
             $sema->release($tokens);
             printf("协程 [%d] 释放信号量\n", Coroutine::getCid());
         });
 
+        // 确保此协程在前一个协程后尝试获取信号量
+        $chan->pop();
         $acquireAt = time();
         $sema->acquire($tokens);
         $resumedAt = time();
