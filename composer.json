@@ -18,7 +18,10 @@
     },
     "autoload": {
         "psr-4": {
-            "Hyperf\\Incubator\\": "src/"
+            "Hyperf\\Incubator\\Barrier\\": "src/Barrier/",
+            "Hyperf\\Incubator\\Semaphore\\": "src/Semaphore/",
+            "Hyperf\\Incubator\\SingleFlight\\": "src/SingleFlight/",
+            "Hyperf\\Incubator\\WorkerPool\\": "src/WorkerPool/"
         }
     },
     "require": {
