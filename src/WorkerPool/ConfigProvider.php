@@ -10,9 +10,7 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace Hyperf\Incubator;
-
-use Hyperf\Incubator\Barrier\Aspect\BarrierAspect;
+namespace Hyperf\Incubator\WorkerPool;
 
 class ConfigProvider
 {
@@ -25,9 +23,6 @@ class ConfigProvider
                         __DIR__,
                     ],
                 ],
-            ],
-            'aspects' => [
-                BarrierAspect::class,
             ],
         ];
     }
