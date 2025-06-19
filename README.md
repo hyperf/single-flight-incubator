@@ -124,15 +124,20 @@ run(static function () {
     $config = new Config();
     $config->setCapacity(5);
     $pool = new WorkerPool($config);
+
+    // 关闭协程池
     defer(static fn () => $pool->stop());
 
     // 投递异步任务
-    $mockBiz = static fn () => Coroutine::getCid();
-    $pool->submit($mockBiz);
+    $mockBiz = static fn (): int => Coroutine::getCid();
+    $ret = $pool->submit($mockBiz);
+    if (is_null($ret)) {
+        printf("投递异步任务若不关心返回值可直接忽略\n");
+    }
 
     // 投递同步任务，可直接获取结果
     $ret = $pool->submit($mockBiz, sync: true);
-    if (Coroutine::getCid() != $ret) {
+    if (Coroutine::getCid() !== $ret) {
         printf("同步任务投递到worker-pool中的工作协程执行\n");
     }
 
@@ -140,10 +145,10 @@ run(static function () {
     $task = new Task($mockBiz(...), sync: false);
     $nullRet = $pool->submitTask($task);
     if (is_null($nullRet)) {
-        printf("投递异步任务不会直接得到返回值\n");
+        printf("投递异步任务不会直接得到返回值，可通过waitResult方法获取\n");
     }
     $ret = $task->waitResult();
-    if (Coroutine::getCid() != $ret) {
+    if (Coroutine::getCid() !== $ret) {
         printf("异步任务投递到worker-pool中的工作协程执行\n");
     }
 });
