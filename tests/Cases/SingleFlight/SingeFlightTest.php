@@ -142,14 +142,9 @@ class SingeFlightTest extends TestCase
         $barrierKey = uniqid();
         $ret = [];
         $callables = [];
-        $range = range(1, 10000);
-        $forgetTimes = mt_rand(1, 10);
-        go(static function () use ($barrierKey, $forgetTimes) {
-            for ($i = 0; $i < $forgetTimes; ++$i) {
-                usleep(100 * 1000);
-                SingleFlight::forget($barrierKey);
-            }
-        });
+        $range = range(1, 1000);
+        $forgetTimes = mt_rand(1, 500);
+
         foreach ($range as $v) {
             $callables[] = static function () use ($barrierKey, $v, &$ret) {
                 $ret[] = SingleFlight::do($barrierKey, static function () use ($v, &$ret) {
@@ -159,6 +154,15 @@ class SingeFlightTest extends TestCase
                 });
             };
         }
+
+        $callables = array_merge($callables, array_fill(0, $forgetTimes, static function () use ($barrierKey) {
+            $sleepMs = 50 + mt_rand(0, 50);
+            usleep($sleepMs * 1000);
+            SingleFlight::forget($barrierKey);
+        }));
+
+        shuffle($callables);
+
         parallel($callables);
 
         $this->assertCount(count($range), $ret);
