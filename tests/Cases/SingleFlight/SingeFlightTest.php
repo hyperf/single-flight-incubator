@@ -142,30 +142,33 @@ class SingeFlightTest extends TestCase
         $barrierKey = uniqid();
         $ret = [];
         $callables = [];
-        $range = range(1, 1000);
+        $doTimes = 1000;
         $forgetTimes = mt_rand(1, 500);
+        $allTimes = $doTimes + $forgetTimes;
 
-        foreach ($range as $v) {
-            $callables[] = static function () use ($barrierKey, $v, &$ret) {
-                $ret[] = SingleFlight::do($barrierKey, static function () use ($v, &$ret) {
-                    // ensure that other coroutines can be scheduled at the same time
-                    usleep(200 * 1000);
-                    return $v;
-                });
-            };
+        for ($i = 0; $i < $allTimes; ++$i) {
+            if ($i < $doTimes) {
+                $callables[] = static function () use ($barrierKey, $i, &$ret) {
+                    $ret[] = SingleFlight::do($barrierKey, static function () use ($i, &$ret) {
+                        // ensure that other coroutines can be scheduled at the same time
+                        usleep(200 * 1000);
+                        return $i;
+                    });
+                };
+            } else {
+                $callables[] = static function () use ($barrierKey) {
+                    $sleepMs = 50 + mt_rand(0, 50);
+                    usleep($sleepMs);
+                    SingleFlight::forget($barrierKey);
+                };
+            }
         }
-
-        $callables = array_merge($callables, array_fill(0, $forgetTimes, static function () use ($barrierKey) {
-            $sleepMs = 50 + mt_rand(0, 50);
-            usleep($sleepMs * 1000);
-            SingleFlight::forget($barrierKey);
-        }));
 
         shuffle($callables);
 
         parallel($callables);
 
-        $this->assertCount(count($range), $ret);
+        $this->assertCount($doTimes, $ret);
         $this->assertCount($forgetTimes + 1, array_unique($ret));
         $this->assertEmpty(SingleFlight::list());
     }
