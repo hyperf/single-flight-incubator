@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Hyperf\Incubator\SingleFlight;
 
+use Hyperf\Incubator\SingleFlight\Aspect\SingleFlightAspect;
+
 class ConfigProvider
 {
     public function __invoke(): array
@@ -23,6 +25,9 @@ class ConfigProvider
                         __DIR__,
                     ],
                 ],
+            ],
+            'aspects' => [
+                SingleFlightAspect::class,
             ],
         ];
     }
