@@ -18,7 +18,7 @@ use Hyperf\Di\Annotation\AbstractAnnotation;
 #[Attribute(Attribute::TARGET_METHOD)]
 class Barrier extends AbstractAnnotation
 {
-    public function __construct(public ?string $value, public int $parties, public float $timeout = -1)
+    public function __construct(public string $value = '', public int $parties = 0, public float $timeout = -1)
     {
     }
 }
