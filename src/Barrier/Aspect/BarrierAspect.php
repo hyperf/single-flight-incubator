@@ -49,8 +49,8 @@ class BarrierAspect extends AbstractAspect
         }
 
         $barrierKey = $this->barrierKey($annotation->value, $proceedingJoinPoint);
-        $parties = $this->parties($annotation->parties, $proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0);
-        $timeout = $this->timeout($annotation->timeout, $proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1);
+        $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0));
+        $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1));
 
         BarrierManager::awaitForCounter($barrierKey, $parties, $timeout);
 
@@ -107,10 +107,6 @@ class BarrierAspect extends AbstractAspect
         return -1;
     }
 
-    /**
-     * Generate barrier key.
-     * @throws AnnotationException
-     */
     private function barrierKey(string $annoValue, ProceedingJoinPoint $proceedingJoinPoint): string
     {
         if ($annoValue) {

@@ -61,7 +61,7 @@ class AspectTest extends TestCase
         $callables = [];
         $aspect = new SingleFlightAspect();
         for ($i = 0; $i < 10000; ++$i) {
-            $point = new ProceedingJoinPoint(static fn () => $this->fail('testAspectProcess failed'), 'MockClass', 'mockMethod', ['keys' => ['a' => 1, 'b' => 2]]);
+            $point = new ProceedingJoinPoint(fn () => $this->fail('testAspectProcess failed'), 'MockClass', 'mockMethod', ['keys' => ['a' => 1, 'b' => 2]]);
             $point->pipe = static function () use ($sleepMs, $i) {
                 usleep($sleepMs * 1000);
                 return $i;

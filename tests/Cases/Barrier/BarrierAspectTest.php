@@ -33,6 +33,7 @@ class BarrierAspectTest extends TestCase
 {
     protected function tearDown(): void
     {
+        Context::clearAll();
         AnnotationCollector::clear();
     }
 
@@ -72,17 +73,15 @@ class BarrierAspectTest extends TestCase
 
     public function testResolvePartiesPriority()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
 
         $mockBarrier = new Barrier('test_key', 5, 10.0);
-        AnnotationCollector::set('TestPartiesClass._m.testMethod.' . Barrier::class, $mockBarrier);
+        AnnotationCollector::set('MockClass._m.mockMethod.' . Barrier::class, $mockBarrier);
 
         $point = new ProceedingJoinPoint(
             static fn () => 'ret',
-            'TestPartiesClass',
-            'testMethod',
+            'MockClass',
+            'mockMethod',
             ['keys' => [BarrierAspect::ARG_PARTIES => 3, BarrierAspect::ARG_TIMEOUT => 8.0]]
         );
         $point->pipe = static fn () => 'ret';
@@ -108,8 +107,6 @@ class BarrierAspectTest extends TestCase
 
     public function testResolveBarrierKey()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
@@ -117,8 +114,8 @@ class BarrierAspectTest extends TestCase
 
         $point = new ProceedingJoinPoint(
             static fn () => 'ret',
-            'TestKeyClass',
-            'testMethod',
+            'MockClass',
+            'mockMethod',
             ['keys' => ['userId' => 123, 'action' => 'login']]
         );
 
@@ -127,8 +124,8 @@ class BarrierAspectTest extends TestCase
 
         $point2 = new ProceedingJoinPoint(
             static fn () => 'ret',
-            'TestKeyClass',
-            'testMethod',
+            'MockClass',
+            'mockMethod',
             ['keys' => ['barrierKey' => 'method_key']]
         );
 
@@ -139,8 +136,8 @@ class BarrierAspectTest extends TestCase
 
         $point3 = new ProceedingJoinPoint(
             static fn () => 'ret',
-            'TestKeyClass',
-            'testMethod',
+            'MockClass',
+            'mockMethod',
             ['keys' => []]
         );
 
@@ -150,17 +147,15 @@ class BarrierAspectTest extends TestCase
 
     public function testBarrierKeyTemplateWithNestedProperties()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
         $barrierKeyMethod->setAccessible(true);
 
         $point = new ProceedingJoinPoint(
-            static fn () => 'result',
-            'TestTplClass',
-            'testMethod',
+            static fn () => 'ret',
+            'MockClass',
+            'mockMethod',
             ['keys' => [
                 'user' => ['id' => 123, 'name' => 'foo'],
                 'config' => ['env' => 'prod'],
@@ -173,8 +168,6 @@ class BarrierAspectTest extends TestCase
 
     public function testResolvePartiesException()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $partiesMethod = $reflection->getMethod('parties');
@@ -190,17 +183,15 @@ class BarrierAspectTest extends TestCase
 
     public function testResolveKeyException()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
         $barrierKeyMethod->setAccessible(true);
 
         $point = new ProceedingJoinPoint(
-            static fn () => 'result',
-            'TestNoValidKeyClass',
-            'testMethod',
+            static fn () => 'ret',
+            'MockClass',
+            'mockMethod',
             ['keys' => []]
         );
 
@@ -214,8 +205,6 @@ class BarrierAspectTest extends TestCase
 
     public function testResolveTimeoutFallback()
     {
-        Context::clearAll();
-
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $timeoutMethod = $reflection->getMethod('timeout');
