@@ -53,10 +53,10 @@ class SemaphoreAspect extends AbstractAspect
         }
 
         $args = $proceedingJoinPoint->arguments['keys'];
-        $key = $this->key($annotation->key, $args);
-        $tokens = $this->tokens($annotation->tokens, (int) ($args[self::ARG_TOKENS] ?? 1));
-        $acquire = $this->acquire($annotation->acquire, (int) ($args[self::ARG_ACQUIRE] ?? 1));
-        $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1));
+        $key = $this->key($annotation->key, $args, Context::key());
+        $tokens = $this->tokens($annotation->tokens, (int) ($args[self::ARG_TOKENS] ?? 1), Context::tokens());
+        $acquire = $this->acquire($annotation->acquire, (int) ($args[self::ARG_ACQUIRE] ?? 1), Context::acquire());
+        $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1), Context::timeout());
         $key = $key . $tokens;
 
         $semaphore = SemaphoreManager::getSema($key, $tokens);
@@ -76,7 +76,7 @@ class SemaphoreAspect extends AbstractAspect
         }
     }
 
-    private function key(string $key, array $args): string
+    private function key(string $key, array $args, $contextKey): string
     {
         if ($value = $key) {
             preg_match_all('/#\{[\w.]+}/', $value, $matches);
@@ -92,14 +92,14 @@ class SemaphoreAspect extends AbstractAspect
         if (($key = $args[self::ARG_KEY] ?? null) && is_string($key)) {
             return $key;
         }
-        if ($key = Context::key()) {
-            return $key;
+        if ($contextKey) {
+            return $contextKey;
         }
 
-        throw new RuntimeException('No valid annotation key argument resolved');
+        throw new RuntimeException('No valid Semaphore annotation key property resolved');
     }
 
-    private function tokens(int $annoTokens, int $argTokens): int
+    private function tokens(int $annoTokens, int $argTokens, int $contextTokens): int
     {
         if ($annoTokens > 1) {
             return $annoTokens;
@@ -107,14 +107,14 @@ class SemaphoreAspect extends AbstractAspect
         if ($argTokens > 1) {
             return $argTokens;
         }
-        if (($tokens = Context::tokens()) && $tokens > 1) {
-            return $tokens;
+        if ($contextTokens > 1) {
+            return $contextTokens;
         }
 
         return 1;
     }
 
-    private function acquire(int $annoAcquire, int $argAcquire): int
+    private function acquire(int $annoAcquire, int $argAcquire, int $contextAcquire): int
     {
         if ($annoAcquire > 1) {
             return $annoAcquire;
@@ -122,14 +122,14 @@ class SemaphoreAspect extends AbstractAspect
         if ($argAcquire > 1) {
             return $argAcquire;
         }
-        if (($acquire = Context::acquire()) && $acquire > 1) {
-            return $acquire;
+        if ($contextAcquire > 1) {
+            return $contextAcquire;
         }
 
         return 1;
     }
 
-    private function timeout(float $annoTimeout, float $argTimeout): float
+    private function timeout(float $annoTimeout, float $argTimeout, float $contextTimeout): float
     {
         if ($annoTimeout > 0) {
             return $annoTimeout;
@@ -137,8 +137,8 @@ class SemaphoreAspect extends AbstractAspect
         if ($argTimeout > 0) {
             return $argTimeout;
         }
-        if (($timeout = Context::timeout()) && $timeout > 0) {
-            return $timeout;
+        if ($contextTimeout > 0) {
+            return $contextTimeout;
         }
 
         return -1;

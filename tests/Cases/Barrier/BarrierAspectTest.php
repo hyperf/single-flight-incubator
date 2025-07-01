@@ -74,35 +74,19 @@ class BarrierAspectTest extends TestCase
     public function testResolvePartiesPriority()
     {
         $aspect = new BarrierAspect();
-
-        $mockBarrier = new Barrier('test_key', 5, 10.0);
-        AnnotationCollector::set('MockClass._m.mockMethod.' . Barrier::class, $mockBarrier);
-
-        $point = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => [BarrierAspect::ARG_PARTIES => 3, BarrierAspect::ARG_TIMEOUT => 8.0]]
-        );
-        $point->pipe = static fn () => 'ret';
-
-        Context::withParties(2);
-        Context::withTimeout(7.0);
-
         $reflection = new ReflectionClass($aspect);
         $partiesMethod = $reflection->getMethod('parties');
         $partiesMethod->setAccessible(true);
-        $timeoutMethod = $reflection->getMethod('timeout');
-        $timeoutMethod->setAccessible(true);
 
-        $this->assertEquals(5, $partiesMethod->invoke($aspect, 5, 3));
-        $this->assertEquals(10.0, $timeoutMethod->invoke($aspect, 10.0, 8.0));
+        $this->assertEquals(5, $partiesMethod->invoke($aspect, 5, 3, 2));
 
-        $this->assertEquals(3, $partiesMethod->invoke($aspect, 0, 3));
-        $this->assertEquals(8.0, $timeoutMethod->invoke($aspect, -1, 8.0));
+        $this->assertEquals(3, $partiesMethod->invoke($aspect, 0, 3, 2));
 
-        $this->assertEquals(2, $partiesMethod->invoke($aspect, 0, 0));
-        $this->assertEquals(7.0, $timeoutMethod->invoke($aspect, -1, -1));
+        $this->assertEquals(2, $partiesMethod->invoke($aspect, 0, 0, 2));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('No valid Barrier annotation parties property resolved');
+        $partiesMethod->invoke($aspect, 0, 0, 0);
     }
 
     public function testResolveBarrierKey()
@@ -112,36 +96,16 @@ class BarrierAspectTest extends TestCase
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
         $barrierKeyMethod->setAccessible(true);
 
-        $point = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => ['userId' => 123, 'action' => 'login']]
-        );
-
-        $key = $barrierKeyMethod->invoke($aspect, 'user_#{userId}_#{action}', $point);
+        $args = ['userId' => 123, 'action' => 'login'];
+        $key = $barrierKeyMethod->invoke($aspect, 'user_#{userId}_#{action}', $args, 'context_key');
         $this->assertEquals('user_123_login', $key);
 
-        $point2 = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => ['barrierKey' => 'method_key']]
-        );
-
-        Context::withKey('context_key');
-
-        $key = $barrierKeyMethod->invoke($aspect, '', $point2);
+        $args = ['barrierKey' => 'method_key', 'other' => 'value'];
+        $key = $barrierKeyMethod->invoke($aspect, '', $args, 'context_key');
         $this->assertEquals('method_key', $key);
 
-        $point3 = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => []]
-        );
-
-        $key = $barrierKeyMethod->invoke($aspect, '', $point3);
+        $args = ['other' => 'value'];
+        $key = $barrierKeyMethod->invoke($aspect, '', $args, 'context_key');
         $this->assertEquals('context_key', $key);
     }
 
@@ -152,17 +116,12 @@ class BarrierAspectTest extends TestCase
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
         $barrierKeyMethod->setAccessible(true);
 
-        $point = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => [
-                'user' => ['id' => 123, 'name' => 'foo'],
-                'config' => ['env' => 'prod'],
-            ]]
-        );
+        $args = [
+            'user' => ['id' => 123, 'name' => 'foo'],
+            'config' => ['env' => 'prod'],
+        ];
 
-        $key = $barrierKeyMethod->invoke($aspect, 'app_#{user.id}_#{user.name}_#{config.env}', $point);
+        $key = $barrierKeyMethod->invoke($aspect, 'app_#{user.id}_#{user.name}_#{config.env}', $args, 'context_key');
         $this->assertEquals('app_123_foo_prod', $key);
     }
 
@@ -173,12 +132,10 @@ class BarrierAspectTest extends TestCase
         $partiesMethod = $reflection->getMethod('parties');
         $partiesMethod->setAccessible(true);
 
-        Context::withParties(0);
-
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No valid annotation parties argument resolved');
+        $this->expectExceptionMessage('No valid Barrier annotation parties property resolved');
 
-        $partiesMethod->invoke($aspect, 0, 0);
+        $partiesMethod->invoke($aspect, 0, 0, 0);
     }
 
     public function testResolveKeyException()
@@ -188,32 +145,26 @@ class BarrierAspectTest extends TestCase
         $barrierKeyMethod = $reflection->getMethod('barrierKey');
         $barrierKeyMethod->setAccessible(true);
 
-        $point = new ProceedingJoinPoint(
-            static fn () => 'ret',
-            'MockClass',
-            'mockMethod',
-            ['keys' => []]
-        );
-
-        Context::withKey('');
-
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No valid annotation value argument resolved');
+        $this->expectExceptionMessage('No valid Barrier annotation value property resolved');
 
-        $barrierKeyMethod->invoke($aspect, '', $point);
+        $barrierKeyMethod->invoke($aspect, '', [], '');
     }
 
-    public function testResolveTimeoutFallback()
+    public function testResolveTimeoutPriority()
     {
         $aspect = new BarrierAspect();
         $reflection = new ReflectionClass($aspect);
         $timeoutMethod = $reflection->getMethod('timeout');
         $timeoutMethod->setAccessible(true);
 
-        $ret = $timeoutMethod->invoke($aspect, -1, -1);
-        $this->assertEquals(-1, $ret);
+        $this->assertEquals(10.0, $timeoutMethod->invoke($aspect, 10.0, 8.0, 7.0));
 
-        $ret = $timeoutMethod->invoke($aspect, 0, 0);
-        $this->assertEquals(-1, $ret);
+        $this->assertEquals(8.0, $timeoutMethod->invoke($aspect, -1, 8.0, 7.0));
+
+        $this->assertEquals(7.0, $timeoutMethod->invoke($aspect, -1, -1, 7.0));
+
+        $this->assertEquals(-1, $timeoutMethod->invoke($aspect, -1, -1, -1));
+        $this->assertEquals(-1, $timeoutMethod->invoke($aspect, 0, 0, 0));
     }
 }

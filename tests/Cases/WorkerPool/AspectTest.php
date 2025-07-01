@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 namespace HyperfTest\Incubator\Cases\WorkerPool;
 
+use Hyperf\Coroutine\Coroutine;
 use Hyperf\Di\Annotation\AnnotationCollector;
 use Hyperf\Di\Aop\ProceedingJoinPoint;
-use Hyperf\Engine\Coroutine;
 use Hyperf\Incubator\WorkerPool\Annotation\WorkerPool;
 use Hyperf\Incubator\WorkerPool\Aspect\WorkerPoolAspect;
 use Hyperf\Incubator\WorkerPool\Config;
@@ -63,7 +63,7 @@ class AspectTest extends TestCase
 
         $args = [];
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No valid annotation name property resolved');
+        $this->expectExceptionMessage('No valid WorkerPool annotation name property resolved');
         $nameMethod->invoke($aspect, '', $args, '');
     }
 

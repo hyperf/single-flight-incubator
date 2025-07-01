@@ -83,7 +83,7 @@ class WorkerPoolAspect extends AbstractAspect
             return $contextName;
         }
 
-        throw new RuntimeException('No valid annotation name property resolved');
+        throw new RuntimeException('No valid WorkerPool annotation name property resolved');
     }
 
     private function timeout(float $annoTimeout, float $argTimeout, float $contextTimeout): float

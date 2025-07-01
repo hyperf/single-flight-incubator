@@ -47,13 +47,19 @@ class AspectTest extends TestCase
         $method = $reflection->getMethod('tokens');
         $method->setAccessible(true);
 
-        $ret = $method->invoke($aspect, 5, 3);
+        $ret = $method->invoke($aspect, 5, 3, 2);
         $this->assertEquals(5, $ret);
 
-        $ret = $method->invoke($aspect, 1, 3);
+        $ret = $method->invoke($aspect, 1, 3, 2);
         $this->assertEquals(3, $ret);
 
-        $ret = $method->invoke($aspect, 1, 1);
+        $ret = $method->invoke($aspect, 1, 1, 2);
+        $this->assertEquals(2, $ret);
+
+        $ret = $method->invoke($aspect, 1, 1, 1);
+        $this->assertEquals(1, $ret);
+
+        $ret = $method->invoke($aspect, 0, 0, 0);
         $this->assertEquals(1, $ret);
     }
 
@@ -64,13 +70,19 @@ class AspectTest extends TestCase
         $method = $reflection->getMethod('acquire');
         $method->setAccessible(true);
 
-        $result = $method->invoke($aspect, 3, 2);
+        $result = $method->invoke($aspect, 3, 2, 4);
         $this->assertEquals(3, $result);
 
-        $result = $method->invoke($aspect, 1, 2);
+        $result = $method->invoke($aspect, 1, 2, 4);
         $this->assertEquals(2, $result);
 
-        $result = $method->invoke($aspect, 1, 1);
+        $result = $method->invoke($aspect, 1, 1, 4);
+        $this->assertEquals(4, $result);
+
+        $result = $method->invoke($aspect, 1, 1, 1);
+        $this->assertEquals(1, $result);
+
+        $result = $method->invoke($aspect, 0, 0, 0);
         $this->assertEquals(1, $result);
     }
 
@@ -81,13 +93,25 @@ class AspectTest extends TestCase
         $method = $reflection->getMethod('timeout');
         $method->setAccessible(true);
 
-        $result = $method->invoke($aspect, 5.0, 3.0);
+        $result = $method->invoke($aspect, 5.0, 3.0, 2.0);
         $this->assertEquals(5.0, $result);
 
-        $result = $method->invoke($aspect, -1.0, 3.0);
+        $result = $method->invoke($aspect, -1.0, 3.0, 2.0);
         $this->assertEquals(3.0, $result);
 
-        $result = $method->invoke($aspect, -1.0, -1.0);
+        $result = $method->invoke($aspect, 0.0, 3.0, 2.0);
+        $this->assertEquals(3.0, $result);
+
+        $result = $method->invoke($aspect, -1.0, -1.0, 2.0);
+        $this->assertEquals(2.0, $result);
+
+        $result = $method->invoke($aspect, 0.0, 0.0, 2.0);
+        $this->assertEquals(2.0, $result);
+
+        $result = $method->invoke($aspect, -1.0, -1.0, -1.0);
+        $this->assertEquals(-1.0, $result);
+
+        $result = $method->invoke($aspect, 0.0, 0.0, 0.0);
         $this->assertEquals(-1.0, $result);
     }
 
@@ -100,7 +124,7 @@ class AspectTest extends TestCase
 
         $key = uniqid();
         $args = [SemaphoreAspect::ARG_KEY => $key];
-        $result = $method->invoke($aspect, '', $args);
+        $result = $method->invoke($aspect, '', $args, '');
         $this->assertEquals($key, $result);
     }
 
@@ -112,9 +136,7 @@ class AspectTest extends TestCase
         $method->setAccessible(true);
 
         $key = uniqid();
-        Context::withKey($key);
-
-        $result = $method->invoke($aspect, '', []);
+        $result = $method->invoke($aspect, '', [], $key);
         $this->assertEquals($key, $result);
     }
 
@@ -126,9 +148,9 @@ class AspectTest extends TestCase
         $method->setAccessible(true);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No valid annotation key argument resolved');
+        $this->expectExceptionMessage('No valid Semaphore annotation key property resolved');
 
-        $method->invoke($aspect, '', []);
+        $method->invoke($aspect, '', [], '');
     }
 
     public function testKeyTemplateWithNestedProperties()
@@ -143,7 +165,7 @@ class AspectTest extends TestCase
             'action' => 'update',
         ];
 
-        $result = $method->invoke($aspect, 'user_#{user.id}_#{action}', $args);
+        $result = $method->invoke($aspect, 'user_#{user.id}_#{action}', $args, '');
         $this->assertEquals('user_123_update', $result);
     }
 
@@ -154,15 +176,13 @@ class AspectTest extends TestCase
         $tokensMethod = $reflection->getMethod('tokens');
         $tokensMethod->setAccessible(true);
 
-        Context::withTokens(10);
-
-        $result = $tokensMethod->invoke($aspect, 5, 1);
+        $result = $tokensMethod->invoke($aspect, 5, 1, 10);
         $this->assertEquals(5, $result);
 
-        $result = $tokensMethod->invoke($aspect, 1, 3);
+        $result = $tokensMethod->invoke($aspect, 1, 3, 10);
         $this->assertEquals(3, $result);
 
-        $result = $tokensMethod->invoke($aspect, 1, 1);
+        $result = $tokensMethod->invoke($aspect, 1, 1, 10);
         $this->assertEquals(10, $result);
     }
 
@@ -180,7 +200,7 @@ class AspectTest extends TestCase
 
         $annotation = new Semaphore('#{arg1}_#{arg2}');
         AnnotationCollector::collectMethod('SemaphoreTestClass', 'testMethod', Semaphore::class, $annotation);
-        $result = $method->invoke($aspect, '#{arg1}_#{arg2}', ['arg1' => 'arg1', 'arg2' => 'arg2']);
+        $result = $method->invoke($aspect, '#{arg1}_#{arg2}', ['arg1' => 'arg1', 'arg2' => 'arg2'], '');
 
         $this->assertEquals('arg1_arg2', $result);
     }

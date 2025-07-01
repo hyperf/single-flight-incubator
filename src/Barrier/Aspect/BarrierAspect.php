@@ -43,14 +43,15 @@ class BarrierAspect extends AbstractAspect
      */
     public function process(ProceedingJoinPoint $proceedingJoinPoint)
     {
-        $annotation = $this->barrierAnnotation($proceedingJoinPoint->className, $proceedingJoinPoint->methodName);
-        if (is_null($annotation->value)) {
-            return $proceedingJoinPoint->process();
+        $annotation = AnnotationCollector::getClassMethodAnnotation($proceedingJoinPoint->className, $proceedingJoinPoint->methodName)[Barrier::class] ?? null;
+        if (is_null($annotation)) {
+            throw new AnnotationException("Annotation Barrier couldn't be collected successfully.");
         }
 
-        $barrierKey = $this->barrierKey($annotation->value, $proceedingJoinPoint);
-        $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0));
-        $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1));
+        $args = $proceedingJoinPoint->arguments['keys'];
+        $barrierKey = $this->barrierKey($annotation->value, $args, Context::key());
+        $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0), Context::parties());
+        $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1), Context::timeout());
 
         BarrierManager::awaitForCounter($barrierKey, $parties, $timeout);
 
@@ -58,80 +59,58 @@ class BarrierAspect extends AbstractAspect
     }
 
     /**
-     * @throws AnnotationException
-     */
-    private function barrierAnnotation(string $class, string $method): Barrier
-    {
-        $annotation = AnnotationCollector::getClassMethodAnnotation($class, $method)[Barrier::class] ?? null;
-        if (is_null($annotation)) {
-            throw new AnnotationException("Annotation Barrier couldn't be collected successfully.");
-        }
-
-        return $annotation;
-    }
-
-    /**
      * @throws RuntimeException
      */
-    private function parties(int $annoParties, int $argParties): int
+    private function parties(int $annoParties, int $argParties, int $contextParties): int
     {
         if ($annoParties > 0) {
             return $annoParties;
         }
-
         if ($argParties > 0) {
             return $argParties;
         }
-
-        if (($parties = Context::parties()) && $parties > 0) {
-            return $parties;
+        if ($contextParties > 0) {
+            return $contextParties;
         }
 
-        throw new RuntimeException('No valid annotation parties argument resolved');
+        throw new RuntimeException('No valid Barrier annotation parties property resolved');
     }
 
-    private function timeout(float $annoTimeout, float $argTimeout): float
+    private function timeout(float $annoTimeout, float $argTimeout, float $contextTimeout): float
     {
         if ($annoTimeout > 0) {
             return $annoTimeout;
         }
-
         if ($argTimeout > 0) {
             return $argTimeout;
         }
-
-        if (($timeout = Context::timeout()) && $timeout > 0) {
-            return $timeout;
+        if ($contextTimeout > 0) {
+            return $contextTimeout;
         }
 
         return -1;
     }
 
-    private function barrierKey(string $annoValue, ProceedingJoinPoint $proceedingJoinPoint): string
+    private function barrierKey(string $annoValue, array $args, string $contextValue): string
     {
-        if ($annoValue) {
-            $arguments = $proceedingJoinPoint->arguments['keys'];
-            if ($value = $annoValue) {
-                preg_match_all('/#\{[\w.]+}/', $value, $matches);
-                $matches = $matches[0];
-                if ($matches) {
-                    foreach ($matches as $search) {
-                        $k = str_replace(['#{', '}'], '', $search);
-                        $value = Str::replaceFirst($search, (string) data_get($arguments, $k), $value);
-                    }
+        if ($value = $annoValue) {
+            preg_match_all('/#\{[\w.]+}/', $value, $matches);
+            $matches = $matches[0];
+            if ($matches) {
+                foreach ($matches as $search) {
+                    $k = str_replace(['#{', '}'], '', $search);
+                    $value = Str::replaceFirst($search, (string) data_get($args, $k), $value);
                 }
             }
             return $value;
         }
-
-        if (($value = $proceedingJoinPoint->arguments['keys'][self::ARG_KEY] ?? null) && is_string($value)) {
+        if (($value = $args[self::ARG_KEY] ?? null) && is_string($value)) {
             return $value;
         }
-
-        if ($value = Context::key()) {
-            return $value;
+        if ($contextValue) {
+            return $contextValue;
         }
 
-        throw new RuntimeException('No valid annotation value argument resolved');
+        throw new RuntimeException('No valid Barrier annotation value property resolved');
     }
 }
