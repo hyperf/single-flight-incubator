@@ -19,7 +19,6 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * @internal
- * @coversNothing
  */
 #[CoversNothing]
 class ConfigTest extends TestCase

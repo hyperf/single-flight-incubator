@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Hyperf\Incubator\WorkerPool;
 
+use Hyperf\Incubator\WorkerPool\Aspect\WorkerPoolAspect;
+
 class ConfigProvider
 {
     public function __invoke(): array
@@ -23,6 +25,9 @@ class ConfigProvider
                         __DIR__,
                     ],
                 ],
+            ],
+            'aspects' => [
+                WorkerPoolAspect::class,
             ],
         ];
     }
