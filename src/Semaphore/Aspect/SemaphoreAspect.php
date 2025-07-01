@@ -20,6 +20,7 @@ use Hyperf\Di\Exception\AnnotationException;
 use Hyperf\Incubator\Semaphore\Annotation\Semaphore;
 use Hyperf\Incubator\Semaphore\Context;
 use Hyperf\Incubator\Semaphore\Exception\RuntimeException;
+use Hyperf\Incubator\Semaphore\Exception\SemaphoreException;
 use Hyperf\Incubator\Semaphore\Exception\TimeoutException;
 use Hyperf\Incubator\Semaphore\SemaphoreManager;
 use Hyperf\Stringable\Str;
@@ -58,13 +59,18 @@ class SemaphoreAspect extends AbstractAspect
         $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1));
         $key = $key . $tokens;
 
+        $semaphore = SemaphoreManager::getSema($key, $tokens);
+        $shouldRelease = true;
         try {
-            $semaphore = SemaphoreManager::getSema($key, $tokens);
             $semaphore->acquire($acquire, $timeout);
-            $ret = $proceedingJoinPoint->process();
-            $semaphore->release($acquire);
-            return $ret;
+            return $proceedingJoinPoint->process();
+        } catch (SemaphoreException $e) {
+            $shouldRelease = false;
+            throw $e;
         } finally {
+            if ($shouldRelease) {
+                $semaphore->release($acquire);
+            }
             unset($semaphore);
             SemaphoreManager::remove($key);
         }

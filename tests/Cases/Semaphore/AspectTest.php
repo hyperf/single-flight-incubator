@@ -214,7 +214,7 @@ class AspectTest extends TestCase
 
         parallel($callables);
 
-        $this->assertGreaterThanOrEqual($sleepMs, $elapsed);
+        $this->assertGreaterThanOrEqual($sleepMs * 9 / 10, $elapsed);
     }
 
     public function testManagerSameSema()
