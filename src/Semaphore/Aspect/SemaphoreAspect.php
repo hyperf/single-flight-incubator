@@ -37,6 +37,8 @@ class SemaphoreAspect extends AbstractAspect
 
     public const ARG_TIMEOUT = 'semaphoreTimeout';
 
+    private const BOUNDARY = 'S@#_!';
+
     public array $annotations = [
         Semaphore::class,
     ];
@@ -57,7 +59,7 @@ class SemaphoreAspect extends AbstractAspect
         $tokens = $this->tokens($annotation->tokens, (int) ($args[self::ARG_TOKENS] ?? 1), Context::tokens());
         $acquire = $this->acquire($annotation->acquire, (int) ($args[self::ARG_ACQUIRE] ?? 1), Context::acquire());
         $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1), Context::timeout());
-        $key = $key . $tokens;
+        $key = $key . self::BOUNDARY . $tokens;
 
         $semaphore = SemaphoreManager::getSema($key, $tokens);
         $shouldRelease = true;

@@ -40,7 +40,7 @@ class BarrierTest extends TestCase
         $waitMs = mt_rand(100, 1000);
 
         for ($i = 0; $i < $parties - 1; ++$i) {
-            $callables[] = static function () use ($barrier) {
+            $callables[] = function () use ($barrier) {
                 $startAt = microtime(true);
                 $barrier->await();
                 $resumeAt = microtime(true);
@@ -48,7 +48,7 @@ class BarrierTest extends TestCase
             };
         }
 
-        $callables[] = static function () use ($barrier, $waitMs) {
+        $callables[] = function () use ($barrier, $waitMs) {
             usleep($waitMs * 1000);
             $barrier->await();
         };
@@ -94,7 +94,7 @@ class BarrierTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parties must be greater than 1');
-        BarrierManager::awaitForCounter(uniqid(), -1);
+        BarrierManager::counterCall(uniqid(), -1, $this->noneStub(...), -1);
     }
 
     public function testBarrierManagerAwaitForCounter()
@@ -105,16 +105,16 @@ class BarrierTest extends TestCase
         $waitMs = rand(100, 1000);
 
         for ($i = 0; $i < $parties - 1; ++$i) {
-            $callables[] = static function () use ($barrierKey, $parties) {
+            $callables[] = function () use ($barrierKey, $parties) {
                 $startAt = microtime(true);
-                BarrierManager::awaitForCounter($barrierKey, $parties);
+                BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...));
                 $resumeAt = microtime(true);
                 return $resumeAt - $startAt;
             };
         }
-        $callables[] = static function () use ($barrierKey, $parties, $waitMs) {
+        $callables[] = function () use ($barrierKey, $parties, $waitMs) {
             usleep($waitMs * 1000);
-            BarrierManager::awaitForCounter($barrierKey, $parties);
+            BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...));
         };
 
         $retAt = array_filter(parallel($callables));
@@ -133,18 +133,18 @@ class BarrierTest extends TestCase
         parallel([
             function () use ($barrierKey, $parties) {
                 try {
-                    BarrierManager::awaitForCounter($barrierKey, $parties, 0.1);
+                    BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...), 0.1);
                 } catch (Exception $exception) {
                     $this->assertInstanceOf(TimeoutException::class, $exception);
                 }
             },
             function () use ($barrierKey, $parties) {
                 usleep(150 * 1000);
-                BarrierManager::awaitForCounter($barrierKey, $parties, 0.1);
+                BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...), 0.1);
             },
             function () use ($barrierKey, $parties) {
                 usleep(200 * 1000);
-                BarrierManager::awaitForCounter($barrierKey, $parties, 0.1);
+                BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...), 0.1);
             },
         ]);
 
@@ -153,10 +153,10 @@ class BarrierTest extends TestCase
 
     public function testBarrierManagerAwaitOnCounterWithMultiBatch()
     {
-        $stub = static function (string $barrierKey, $parties, $waitMs) {
-            return static function () use ($barrierKey, $parties, $waitMs) {
+        $stub = function (string $barrierKey, $parties, $waitMs) {
+            return function () use ($barrierKey, $parties, $waitMs) {
                 usleep($waitMs) * 1000;
-                BarrierManager::awaitForCounter($barrierKey, $parties);
+                BarrierManager::counterCall($barrierKey, $parties, $this->noneStub(...));
             };
         };
 
@@ -171,5 +171,9 @@ class BarrierTest extends TestCase
         parallel($callables);
 
         $this->assertEmpty(BarrierManager::list());
+    }
+
+    private function noneStub()
+    {
     }
 }

@@ -53,9 +53,7 @@ class BarrierAspect extends AbstractAspect
         $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0), Context::parties());
         $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1), Context::timeout());
 
-        BarrierManager::awaitForCounter($barrierKey, $parties, $timeout);
-
-        return $proceedingJoinPoint->process();
+        return BarrierManager::counterCall($barrierKey, $parties, $proceedingJoinPoint->process(...), $timeout);
     }
 
     /**
