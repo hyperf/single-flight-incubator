@@ -34,6 +34,8 @@ class BarrierAspect extends AbstractAspect
 
     public const ARG_TIMEOUT = 'barrierTimeout';
 
+    private const BOUNDARY = 'B@#_!';
+
     public array $annotations = [
         Barrier::class,
     ];
@@ -52,8 +54,9 @@ class BarrierAspect extends AbstractAspect
         $barrierKey = $this->barrierKey($annotation->value, $args, Context::key());
         $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0), Context::parties());
         $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1), Context::timeout());
+        $key = $barrierKey . self::BOUNDARY . $parties;
 
-        return BarrierManager::counterCall($barrierKey, $parties, $proceedingJoinPoint->process(...), $timeout);
+        return BarrierManager::counterCall($key, $parties, $proceedingJoinPoint->process(...), $timeout);
     }
 
     /**

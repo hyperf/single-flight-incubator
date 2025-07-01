@@ -21,8 +21,6 @@ class BarrierManager
 {
     use Container;
 
-    private const BOUNDARY = 'B@#_!';
-
     public static function counterCall(string $key, int $parties, Closure $caller, float $timeout = -1): mixed
     {
         if ($parties <= 1) {
@@ -32,7 +30,6 @@ class BarrierManager
             throw new RuntimeException('Barrier can only be used in coroutine environment');
         }
 
-        $key = $key . self::BOUNDARY . $parties;
         if (! self::has($key)) {
             $barrier = new CounterBarrier($parties);
             self::set($key, $barrier);
