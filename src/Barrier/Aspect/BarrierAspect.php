@@ -34,7 +34,7 @@ class BarrierAspect extends AbstractAspect
 
     public const ARG_TIMEOUT = 'barrierTimeout';
 
-    private const BOUNDARY = 'B@#_!';
+    private const DELIMITER = 'B@#_!';
 
     public array $annotations = [
         Barrier::class,
@@ -51,10 +51,20 @@ class BarrierAspect extends AbstractAspect
         }
 
         $args = $proceedingJoinPoint->arguments['keys'];
+        if (($key = $args[self::ARG_KEY] ?? null) && ! is_string($key)) {
+            throw new RuntimeException('Barrier argument ' . self::ARG_KEY . ' must be a valid string');
+        }
+        if (($parties = $args[self::ARG_PARTIES] ?? null) && ! is_int($parties)) {
+            throw new RuntimeException('Barrier argument ' . self::ARG_PARTIES . ' must be a valid integer');
+        }
+        if (($timeout = $args[self::ARG_TIMEOUT] ?? null) && ! is_float($timeout)) {
+            throw new RuntimeException('Barrier argument ' . self::ARG_TIMEOUT . ' must be a valid float');
+        }
+
         $barrierKey = $this->barrierKey($annotation->value, $args, Context::key());
-        $parties = $this->parties($annotation->parties, (int) ($proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0), Context::parties());
-        $timeout = $this->timeout($annotation->timeout, (float) ($proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1), Context::timeout());
-        $key = $barrierKey . self::BOUNDARY . $parties;
+        $parties = $this->parties($annotation->parties, $proceedingJoinPoint->arguments['keys'][self::ARG_PARTIES] ?? 0, Context::parties());
+        $timeout = $this->timeout($annotation->timeout, $proceedingJoinPoint->arguments['keys'][self::ARG_TIMEOUT] ?? -1, Context::timeout());
+        $key = $barrierKey . self::DELIMITER . $parties;
 
         return BarrierManager::counterCall($key, $parties, $proceedingJoinPoint->process(...), $timeout);
     }

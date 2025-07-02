@@ -16,8 +16,6 @@ interface BarrierInterface
 {
     public function await(float $timeout = -1);
 
-    public function break(): bool;
-
     public function broken(): bool;
 
     public function waiters(): int;

@@ -37,7 +37,7 @@ class SemaphoreAspect extends AbstractAspect
 
     public const ARG_TIMEOUT = 'semaphoreTimeout';
 
-    private const BOUNDARY = 'S@#_!';
+    private const DELIMITER = 'S@#_!';
 
     public array $annotations = [
         Semaphore::class,
@@ -55,11 +55,24 @@ class SemaphoreAspect extends AbstractAspect
         }
 
         $args = $proceedingJoinPoint->arguments['keys'];
+        if (($key = $args[self::ARG_KEY] ?? null) && ! is_string($key)) {
+            throw new RuntimeException('Semaphore argument ' . self::ARG_KEY . ' must be a valid string');
+        }
+        if (($tokens = $args[self::ARG_TOKENS] ?? null) && ! is_int($tokens)) {
+            throw new RuntimeException('Semaphore argument ' . self::ARG_TOKENS . ' must be a valid integer');
+        }
+        if (($acquire = $args[self::ARG_ACQUIRE] ?? null) && ! is_int($acquire)) {
+            throw new RuntimeException('Semaphore argument ' . self::ARG_ACQUIRE . ' must be a valid integer');
+        }
+        if (($timeout = $args[self::ARG_TIMEOUT] ?? null) && ! is_float($timeout)) {
+            throw new RuntimeException('Semaphore argument ' . self::ARG_TIMEOUT . ' must be a valid float');
+        }
+
         $key = $this->key($annotation->key, $args, Context::key());
-        $tokens = $this->tokens($annotation->tokens, (int) ($args[self::ARG_TOKENS] ?? 1), Context::tokens());
-        $acquire = $this->acquire($annotation->acquire, (int) ($args[self::ARG_ACQUIRE] ?? 1), Context::acquire());
-        $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1), Context::timeout());
-        $key = $key . self::BOUNDARY . $tokens;
+        $tokens = $this->tokens($annotation->tokens, $args[self::ARG_TOKENS] ?? 1, Context::tokens());
+        $acquire = $this->acquire($annotation->acquire, $args[self::ARG_ACQUIRE] ?? 1, Context::acquire());
+        $timeout = $this->timeout($annotation->timeout, $args[self::ARG_TIMEOUT] ?? -1, Context::timeout());
+        $key = $key . self::DELIMITER . $tokens;
 
         $semaphore = SemaphoreManager::getSema($key, $tokens);
         $shouldRelease = true;

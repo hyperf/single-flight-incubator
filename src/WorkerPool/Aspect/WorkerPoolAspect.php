@@ -50,9 +50,19 @@ class WorkerPoolAspect extends AbstractAspect
         }
 
         $args = $proceedingJoinPoint->arguments['keys'];
+        if (($name = $args[self::ARG_NAME] ?? null) && ! is_string($name)) {
+            throw new RuntimeException('WorkerPool argument ' . self::ARG_NAME . ' must be a valid string');
+        }
+        if (($timeout = $args[self::ARG_TIMEOUT] ?? null) && ! is_float($timeout)) {
+            throw new RuntimeException('WorkerPool argument ' . self::ARG_TIMEOUT . ' must be a valid float');
+        }
+        if (($sync = $args[self::ARG_SYNC] ?? null) && ! is_bool($sync)) {
+            throw new RuntimeException('WorkerPool argument ' . self::ARG_SYNC . ' must be a valid boolean');
+        }
+
         $name = $this->name($annotation->name, $args, Context::name());
-        $timeout = $this->timeout($annotation->timeout, (float) ($args[self::ARG_TIMEOUT] ?? -1), Context::timeout());
-        $sync = $this->sync($annotation->sync, (bool) ($args[self::ARG_SYNC] ?? true), Context::sync());
+        $timeout = $this->timeout($annotation->timeout, $args[self::ARG_TIMEOUT] ?? -1, Context::timeout());
+        $sync = $this->sync($annotation->sync, $args[self::ARG_SYNC] ?? true, Context::sync());
 
         $pool = WorkerPoolManager::getPool($name);
         $task = new Task($proceedingJoinPoint->process(...), $sync);

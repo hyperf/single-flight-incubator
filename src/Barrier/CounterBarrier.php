@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Incubator\Barrier;
 
 use Hyperf\Engine\Channel;
+use Hyperf\Incubator\Barrier\Exception\RuntimeException;
 use Hyperf\Incubator\Barrier\Exception\TimeoutException;
 
 class CounterBarrier implements BarrierInterface
@@ -25,11 +26,18 @@ class CounterBarrier implements BarrierInterface
 
     public function __construct(protected int $parties)
     {
+        if ($this->parties < 1) {
+            throw new RuntimeException('CounterBarrier parties must be greater than 1');
+        }
         $this->channel = new Channel(1);
     }
 
     public function await(float $timeout = -1): void
     {
+        if ($this->broken) {
+            throw new RuntimeException('CounterBarrier already broken');
+        }
+
         ++$this->waiters;
         $this->tryBreak();
 
@@ -51,14 +59,9 @@ class CounterBarrier implements BarrierInterface
         return $this->broken;
     }
 
-    public function break(): bool
-    {
-        return $this->waiters == $this->parties;
-    }
-
     private function tryBreak(): void
     {
-        if ($this->break()) {
+        if ($this->waiters == $this->parties) {
             $this->broken = true;
             $this->channel->close();
         }
