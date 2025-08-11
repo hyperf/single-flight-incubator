@@ -8,6 +8,7 @@
         "hyperf",
         "single-flight",
         "barrier",
+        "double-barrier",
         "semephore",
         "worker-pool"
     ],
@@ -19,6 +20,7 @@
     "autoload": {
         "psr-4": {
             "Hyperf\\Incubator\\Barrier\\": "src/Barrier/",
+            "Hyperf\\Incubator\\DoubleBarrier\\": "src/DoubleBarrier/",
             "Hyperf\\Incubator\\Semaphore\\": "src/Semaphore/",
             "Hyperf\\Incubator\\SingleFlight\\": "src/SingleFlight/",
             "Hyperf\\Incubator\\WorkerPool\\": "src/WorkerPool/"
@@ -60,6 +62,7 @@
         "hyperf": {
             "config": [
                 "Hyperf\\Incubator\\Barrier\\ConfigProvider",
+                "Hyperf\\Incubator\\DoubleBarrier\\ConfigProvider",
                 "Hyperf\\Incubator\\Semaphore\\ConfigProvider",
                 "Hyperf\\Incubator\\SingleFlight\\ConfigProvider",
                 "Hyperf\\Incubator\\WorkerPool\\ConfigProvider"
