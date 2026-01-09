@@ -5,7 +5,7 @@
 ## 安装
 
 ```bash
-composer require hyperf/single-flight-incubtor
+composer require hyperf/single-flight-incubator
 ```
 
 ## 基本使用
