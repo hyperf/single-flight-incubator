@@ -29,7 +29,8 @@ class Caller
 
     private bool $forgotten = false;
 
-    private ?Channel $channel;
+    /** @var Channel<mixed> */
+    private Channel $channel;
 
     public function __construct(protected string $barrierKey)
     {

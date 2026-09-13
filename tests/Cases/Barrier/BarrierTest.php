@@ -13,13 +13,16 @@ declare(strict_types=1);
 namespace HyperfTest\Incubator\Cases\Barrier;
 
 use Exception;
+use Hyperf\Engine\Channel;
 use Hyperf\Incubator\Barrier\BarrierManager;
 use Hyperf\Incubator\Barrier\CounterBarrier;
 use Hyperf\Incubator\Barrier\Exception\RuntimeException;
 use Hyperf\Incubator\Barrier\Exception\TimeoutException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Throwable;
 
+use function Hyperf\Coroutine\go;
 use function Hyperf\Coroutine\parallel;
 
 /**
@@ -171,6 +174,79 @@ class BarrierTest extends TestCase
         parallel($callables);
 
         $this->assertEmpty(BarrierManager::list());
+    }
+
+    public function testBarrierManagerStartsNewGenerationWhilePreviousBatchRunning()
+    {
+        $barrierKey = uniqid();
+
+        // both parties run long callers, so the tripped entry stays in the container
+        go(static function () use ($barrierKey): void {
+            BarrierManager::counterCall($barrierKey, 2, static fn (): string => usleep(400 * 1000) ? '' : 'a');
+        });
+        usleep(10 * 1000);
+        go(static function () use ($barrierKey): void {
+            BarrierManager::counterCall($barrierKey, 2, static fn (): string => usleep(400 * 1000) ? '' : 'b');
+        });
+
+        // the previous batch callers are still running, a new batch must start a new generation
+        usleep(100 * 1000);
+        $chan = new Channel(2);
+        go(static function () use ($barrierKey, $chan): void {
+            try {
+                $chan->push(BarrierManager::counterCall($barrierKey, 2, static fn (): string => 'c', 1.5));
+            } catch (Throwable $e) {
+                $chan->push('ERR:' . $e->getMessage());
+            }
+        });
+        go(static function () use ($barrierKey, $chan): void {
+            try {
+                $chan->push(BarrierManager::counterCall($barrierKey, 2, static fn (): string => 'd', 1.5));
+            } catch (Throwable $e) {
+                $chan->push('ERR:' . $e->getMessage());
+            }
+        });
+
+        $this->assertEqualsCanonicalizing(['c', 'd'], [$chan->pop(3), $chan->pop(3)]);
+    }
+
+    public function testBarrierManagerDoesNotUnburyFormingGeneration()
+    {
+        $barrierKey = uniqid();
+
+        // the first party finishes fast and cleans the tripped entry
+        go(static function () use ($barrierKey): void {
+            BarrierManager::counterCall($barrierKey, 2, static fn (): string => usleep(50 * 1000) ? '' : 'a');
+        });
+        usleep(10 * 1000);
+        // the last party trips the barrier, and keeps running its caller until t=500
+        go(static function () use ($barrierKey): void {
+            BarrierManager::counterCall($barrierKey, 2, static fn (): string => usleep(500 * 1000) ? '' : 'c');
+        });
+
+        // t≈400: the tripped entry was cleaned, a new generation starts forming
+        usleep(390 * 1000);
+        $chan = new Channel(2);
+        go(static function () use ($barrierKey, $chan): void {
+            try {
+                $chan->push('B:' . BarrierManager::counterCall($barrierKey, 2, static fn (): string => 'b', 2.0));
+            } catch (Throwable $e) {
+                $chan->push('B:' . get_class($e));
+            }
+        });
+
+        // t≈600: the slow party's finally happened at t≈500, it must not unbury the forming barrier
+        usleep(200 * 1000);
+        go(static function () use ($barrierKey, $chan): void {
+            try {
+                $chan->push('D:' . BarrierManager::counterCall($barrierKey, 2, static fn (): string => 'd', 2.0));
+            } catch (Throwable $e) {
+                $chan->push('D:' . get_class($e));
+            }
+        });
+
+        $this->assertSame('B:b', $chan->pop(3));
+        $this->assertSame('D:d', $chan->pop(3));
     }
 
     private function noneStub()

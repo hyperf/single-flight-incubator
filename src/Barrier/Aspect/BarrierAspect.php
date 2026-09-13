@@ -36,6 +36,7 @@ class BarrierAspect extends AbstractAspect
 
     private const DELIMITER = 'B@#_!';
 
+    /** @var array<class-string> */
     public array $annotations = [
         Barrier::class,
     ];
@@ -102,6 +103,9 @@ class BarrierAspect extends AbstractAspect
         return -1;
     }
 
+    /**
+     * @param array<string, mixed> $args
+     */
     private function barrierKey(string $annoValue, array $args, string $contextValue): string
     {
         if ($value = $annoValue) {

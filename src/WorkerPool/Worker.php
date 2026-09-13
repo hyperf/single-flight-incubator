@@ -15,37 +15,24 @@ namespace Hyperf\Incubator\WorkerPool;
 use Closure;
 use Hyperf\Engine\Channel;
 use Hyperf\Incubator\WorkerPool\Exception\RuntimeException;
-use Hyperf\Incubator\WorkerPool\Pool\Contracts\WithNodeInterface;
-use Hyperf\Incubator\WorkerPool\Pool\Node;
 use Throwable;
 
 use function Hyperf\Coroutine\go;
 
-class Worker implements WithNodeInterface
+class Worker
 {
     protected bool $running;
 
     protected int $activeAt;
 
+    /** @var Channel<TaskInterface> */
     protected Channel $channel;
-
-    protected Node $node;
 
     public function __construct(protected ?Closure $onDone = null)
     {
         $this->channel = new Channel();
 
         $this->updateActiveAt();
-    }
-
-    public function getNode(): Node
-    {
-        return $this->node;
-    }
-
-    public function setNode(Node $node): void
-    {
-        $this->node = $node;
     }
 
     public function submit(TaskInterface $task): mixed
@@ -67,9 +54,9 @@ class Worker implements WithNodeInterface
         $this->running = true;
         go(function () {
             while (true) {
-                /** @var bool|TaskInterface $task */
                 $task = $this->channel->pop();
-                if ($task === false && $this->channel->isClosing()) {
+                if ($task === false) {
+                    // the worker was stopped
                     break;
                 }
                 try {
@@ -88,6 +75,10 @@ class Worker implements WithNodeInterface
         return $this;
     }
 
+    /**
+     * @internal called by the pool before handing the worker back to the idle
+     * list, the idle list relies on activeAt being frozen while a worker idles
+     */
     public function updateActiveAt(int $at = 0): void
     {
         if ($at != 0) {

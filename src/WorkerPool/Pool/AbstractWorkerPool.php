@@ -16,28 +16,36 @@ use Closure;
 use Hyperf\Engine\Channel;
 use Hyperf\Incubator\WorkerPool\Exception\RuntimeException;
 use Hyperf\Incubator\WorkerPool\Exception\TimeoutException;
-use Hyperf\Incubator\WorkerPool\Heap\WorkerMinHeap;
 use Hyperf\Incubator\WorkerPool\Pool\Contracts\WorkerPoolInterface;
 use Hyperf\Incubator\WorkerPool\Worker;
 use Iterator;
+use SplDoublyLinkedList;
 use WeakMap;
 
-abstract class AbstractWorkerPool extends DoublyLinkedList implements WorkerPoolInterface
+abstract class AbstractWorkerPool implements WorkerPoolInterface
 {
+    /** @var WeakMap<Worker, true> */
     protected WeakMap $refs;
 
-    protected WorkerMinHeap $heap;
+    /**
+     * @var SplDoublyLinkedList<Worker>
+     *
+     * Idle workers ordered by activeAt: the timestamps are taken in the same
+     * un-interrupted stretch that pushes the worker, so the least recently
+     * active one always stays at the front, and inactive workers always pile
+     * up at the front and are removed end by end
+     */
+    protected SplDoublyLinkedList $idle;
 
+    /** @var Channel<Worker> */
     protected Channel $requestChan;
 
     protected Closure $onDone;
 
     public function __construct(protected int $cap, protected bool $preSpawn, protected int $maxBlocks)
     {
-        parent::__construct();
-
         $this->refs = new WeakMap();
-        $this->heap = new WorkerMinHeap();
+        $this->idle = $this->newIdleList();
 
         $this->onDone = $this->release(...);
         $this->requestChan = new Channel();
@@ -61,7 +69,7 @@ abstract class AbstractWorkerPool extends DoublyLinkedList implements WorkerPool
             return $worker;
         }
 
-        if ($this->len() == 0 && $this->cap > $this->refs->count()) {
+        if ($this->idle->isEmpty() && $this->cap > $this->refs->count()) {
             return $this->new();
         }
 
@@ -70,11 +78,10 @@ abstract class AbstractWorkerPool extends DoublyLinkedList implements WorkerPool
         }
 
         $worker = $this->requestChan->pop($timeout);
-        if ($worker === false && $this->requestChan->isTimeout()) {
-            throw new TimeoutException('Waiting for available worker timeout');
-        }
-
-        if ($worker === false && $this->requestChan->isClosing()) {
+        if ($worker === false) {
+            if ($this->requestChan->isTimeout()) {
+                throw new TimeoutException('Waiting for available worker timeout');
+            }
             throw new RuntimeException('WorkerPool closed');
         }
 
@@ -91,31 +98,21 @@ abstract class AbstractWorkerPool extends DoublyLinkedList implements WorkerPool
         $this->insert($worker);
     }
 
+    /**
+     * @return Iterator<Worker, true>
+     */
     public function iterator(): Iterator
     {
-        return $this->refs->getIterator();
+        $iterator = $this->refs->getIterator();
+        \assert($iterator instanceof Iterator);
+
+        return $iterator;
     }
 
     public function collect(int $at): void
     {
-        if ($this->heap->len() == 0) {
-            return;
-        }
-
-        while (true) {
-            $worker = $this->heap->top();
-            if (is_null($worker)) {
-                break;
-            }
-            if ($worker->activeAt() >= $at) {
-                break;
-            }
-            $worker = $this->heap->extract();
-            if (is_null($worker)) {
-                break;
-            }
-
-            $this->del($worker);
+        while (! $this->idle->isEmpty() && $this->idle->bottom()->activeAt() < $at) {
+            $worker = $this->idle->shift();
             $worker->stop();
             unset($this->refs[$worker]);
         }
@@ -131,16 +128,21 @@ abstract class AbstractWorkerPool extends DoublyLinkedList implements WorkerPool
         }
     }
 
-    abstract protected function insert(Worker $worker): void;
+    protected function insert(Worker $worker): void
+    {
+        if ($this->idle->count() >= $this->cap) {
+            throw new RuntimeException("Pool capacity exceeded: {$this->cap}");
+        }
+
+        $this->idle->push($worker);
+    }
+
+    /**
+     * @return SplDoublyLinkedList<Worker>
+     */
+    abstract protected function newIdleList(): SplDoublyLinkedList;
 
     abstract protected function detach(): ?Worker;
-
-    protected function del(Worker $worker): void
-    {
-        if ($node = $worker->getNode()) {
-            $this->remove($node);
-        }
-    }
 
     protected function spawnWorkers(int $num): void
     {

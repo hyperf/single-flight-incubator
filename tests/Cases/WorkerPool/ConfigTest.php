@@ -69,10 +69,10 @@ class ConfigTest extends TestCase
         $this->assertEquals(500, $config->getMaxBlocks());
     }
 
-    public function testSetCollectInactiveWorker()
+    public function testSetGcIntervalMs()
     {
         $config = new Config();
-        $config->setCollectInactiveWorker(1000);
+        $config->setGcIntervalMs(1000);
 
         $this->assertEquals(1000, $config->getGcIntervalMs());
     }

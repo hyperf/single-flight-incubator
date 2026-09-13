@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace HyperfTest\Incubator\Cases\WorkerPool;
 
 use Hyperf\Incubator\WorkerPool\Exception\RuntimeException;
-use Hyperf\Incubator\WorkerPool\Pool\Contracts\WithNodeInterface;
 use Hyperf\Incubator\WorkerPool\Task;
 use Hyperf\Incubator\WorkerPool\Worker;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -31,7 +30,7 @@ class WorkerTest extends TestCase
         $worker = new Worker();
         $worker = $worker->run();
 
-        $this->assertInstanceOf(WithNodeInterface::class, $worker);
+        $this->assertInstanceOf(Worker::class, $worker);
         $worker->stop();
     }
 

@@ -61,7 +61,7 @@ class ContextTest extends TestCase
 
     public function testTokensDefaultValue()
     {
-        $this->assertEquals(1, Context::tokens());
+        $this->assertEquals(0, Context::tokens());
     }
 
     public function testTokensBoundaryValues()
@@ -90,7 +90,7 @@ class ContextTest extends TestCase
 
     public function testAcquireDefaultValue()
     {
-        $this->assertEquals(1, Context::acquire());
+        $this->assertEquals(0, Context::acquire());
     }
 
     public function testAcquireBoundaryValues()
@@ -151,12 +151,12 @@ class ContextTest extends TestCase
         $this->assertEquals(10.5, Context::timeout());
 
         Context::clear(Context::SEMAPHORE_TOKENS);
-        $this->assertEquals(1, Context::tokens());
+        $this->assertEquals(0, Context::tokens());
         $this->assertEquals(3, Context::acquire());
         $this->assertEquals(10.5, Context::timeout());
 
         Context::clear(Context::SEMAPHORE_ACQUIRE);
-        $this->assertEquals(1, Context::acquire());
+        $this->assertEquals(0, Context::acquire());
         $this->assertEquals(10.5, Context::timeout());
 
         Context::clear(Context::SEMAPHORE_TIMEOUT);
@@ -178,8 +178,8 @@ class ContextTest extends TestCase
         Context::clearAll();
 
         $this->assertEquals('', Context::key());
-        $this->assertEquals(1, Context::tokens());
-        $this->assertEquals(1, Context::acquire());
+        $this->assertEquals(0, Context::tokens());
+        $this->assertEquals(0, Context::acquire());
         $this->assertEquals(-1, Context::timeout());
     }
 

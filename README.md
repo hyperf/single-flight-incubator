@@ -27,7 +27,7 @@ run(static function () use (&$ret, $barrierKey) {
     }
 });
 
-if (count(array_unique($ret)) === 1) {
+if (count(array_unique(array_map('serialize', $ret))) === 1) {
     $ret = var_export($ret, true);
     printf("%s\n只有一个协程会执行闭包逻辑，其他协程等待其结果进行复用\n", $ret);
 }
@@ -193,4 +193,13 @@ run(static function () {
         $barrier->execute($biz(...));
     });
 });
+```
+
+## 性能测试
+
+[benchmarks](benchmarks) 目录下提供独立的基准测试脚本，覆盖各组件的热路径吞吐与内存行为，并记录了历次重构（删除手写堆、链表替换为 `SplQueue`/`SplStack` 等）的同会话实测对比，详见 [benchmarks/README.md](benchmarks/README.md)。
+
+```bash
+php benchmarks/worker-pool.php
+php benchmarks/semaphore.php
 ```

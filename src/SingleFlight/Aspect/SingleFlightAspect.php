@@ -28,6 +28,7 @@ use function Hyperf\Collection\data_get;
 
 class SingleFlightAspect extends AbstractAspect
 {
+    /** @var array<class-string> */
     public array $annotations = [
         SingleFlightAnnotation::class,
     ];
@@ -99,7 +100,7 @@ class SingleFlightAspect extends AbstractAspect
      * @throws AnnotationException
      * @throws Throwable
      */
-    private function shareCall(string $barrierKey, ProceedingJoinPoint $proceedingJoinPoint)
+    private function shareCall(string $barrierKey, ProceedingJoinPoint $proceedingJoinPoint): mixed
     {
         $class = $proceedingJoinPoint->className;
         $method = $proceedingJoinPoint->methodName;

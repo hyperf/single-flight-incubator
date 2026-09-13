@@ -30,18 +30,20 @@ class BarrierManager
             throw new RuntimeException('Barrier can only be used in coroutine environment');
         }
 
-        if (! self::has($key)) {
+        $barrier = self::get($key);
+        if (is_null($barrier) || $barrier->broken()) {
+            // a broken barrier has done serving its batch, take over the key with a new generation
             $barrier = new CounterBarrier($parties);
             self::set($key, $barrier);
         }
 
-        /** @var BarrierInterface $barrier */
-        $barrier = self::get($key);
         try {
             $barrier->await($timeout);
             return $caller();
         } finally {
-            if ($barrier->broken() && self::has($key)) {
+            // remove the entry only when it is still this barrier: a new
+            // generation may already be forming on the same key
+            if ($barrier->broken() && self::get($key) === $barrier) {
                 unset(self::$container[$key]);
             }
         }

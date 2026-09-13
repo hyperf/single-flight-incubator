@@ -174,19 +174,98 @@ class WorkerPoolTest extends TestCase
     {
         $config = (new Config())->setCapacity(5)
             ->setPreSpawn(true)
-            ->setCollectInactiveWorker(150);
+            ->setGcIntervalMs(150);
 
         $pool = new WorkerPool($config);
         usleep(400 * 1000);
 
-        $reflection = new ReflectionClass($pool);
-        $workersProperty = $reflection->getProperty('workers');
-        $workersProperty->setAccessible(true);
-        $workers = $workersProperty->getValue($pool);
-
-        $this->assertEquals(0, $workers->len());
+        $this->assertSame(0, $this->idleWorkersOf($pool));
 
         $pool->stop();
+    }
+
+    public function testCollectWorkersKeepsBusyWorkers()
+    {
+        $config = (new Config())->setCapacity(2)
+            ->setPreSpawn(true)
+            ->setPoolType(Config::QUEUE_POOL)
+            ->setGcIntervalMs(150);
+        $pool = new WorkerPool($config);
+
+        // one worker stays busy past the first GC ticks while the idle one is collected
+        $pool->submit(static fn () => usleep(400 * 1000));
+
+        usleep(500 * 1000);
+
+        // the busy worker survived the collection while the idle one was dropped
+        $this->assertSame(1, $this->aliveWorkersOf($pool));
+
+        // and the pool still serves with the survivor
+        $this->assertEquals('ok', $pool->submit(static fn () => 'ok', sync: true));
+
+        $pool->stop();
+    }
+
+    public function testCollectWorkersKeepsRecentlyActiveWorkers()
+    {
+        $config = (new Config())->setCapacity(1)->setPreSpawn(true)->setGcIntervalMs(150);
+        $pool = new WorkerPool($config);
+
+        // keep the worker active within the GC interval, it must survive every tick
+        for ($i = 0; $i < 6; ++$i) {
+            usleep(100 * 1000);
+            $this->assertEquals('ok', $pool->submit(static fn () => 'ok', sync: true));
+        }
+        $this->assertSame(1, $this->aliveWorkersOf($pool));
+
+        // after staying idle past the interval, the worker is collected
+        usleep(400 * 1000);
+        $this->assertSame(0, $this->aliveWorkersOf($pool));
+
+        // and the pool serves again by spawning on demand
+        $this->assertEquals('ok', $pool->submit(static fn () => 'ok', sync: true));
+
+        $pool->stop();
+    }
+
+    public function testCollectWorkersKeepsFreshIdleWorkers()
+    {
+        $config = (new Config())->setCapacity(2)->setPreSpawn(true)->setGcIntervalMs(150);
+        $pool = new WorkerPool($config);
+
+        // one worker keeps serving until recently, the other idles from the start
+        $pool->submit(static fn () => usleep(250 * 1000));
+
+        usleep(350 * 1000);
+
+        // the stale one was collected while the freshly idle one survived
+        $this->assertSame(1, $this->aliveWorkersOf($pool));
+        $this->assertSame(1, $this->idleWorkersOf($pool));
+
+        $pool->stop();
+    }
+
+    public function testPoolDoesNotLeakAcrossCycles()
+    {
+        $cycle = static function (): void {
+            $config = (new Config())->setCapacity(5)->setPreSpawn(true);
+            $pool = new WorkerPool($config);
+            for ($i = 0; $i < 20; ++$i) {
+                $pool->submit(static fn () => null, sync: true);
+            }
+            $pool->stop();
+        };
+
+        $cycle();
+        $before = memory_get_usage();
+
+        for ($i = 0; $i < 50; ++$i) {
+            $cycle();
+        }
+        gc_collect_cycles();
+
+        // a real leak would retain workers, coroutines and channels per cycle
+        $this->assertLessThan(1024 * 1024, memory_get_usage() - $before);
     }
 
     public function testMaxBlocks()
@@ -298,5 +377,29 @@ class WorkerPoolTest extends TestCase
         $this->assertEquals($extraNum, $exceptionNum);
 
         $pool->stop();
+    }
+
+    private function aliveWorkersOf(WorkerPool $pool): int
+    {
+        $reflection = new ReflectionClass($pool);
+        $workersProperty = $reflection->getProperty('workers');
+        $workersProperty->setAccessible(true);
+
+        $refsProperty = (new ReflectionClass($workersProperty->getValue($pool)))->getProperty('refs');
+        $refsProperty->setAccessible(true);
+
+        return count($refsProperty->getValue($workersProperty->getValue($pool)));
+    }
+
+    private function idleWorkersOf(WorkerPool $pool): int
+    {
+        $reflection = new ReflectionClass($pool);
+        $workersProperty = $reflection->getProperty('workers');
+        $workersProperty->setAccessible(true);
+
+        $idleProperty = (new ReflectionClass($workersProperty->getValue($pool)))->getProperty('idle');
+        $idleProperty->setAccessible(true);
+
+        return count($idleProperty->getValue($workersProperty->getValue($pool)));
     }
 }

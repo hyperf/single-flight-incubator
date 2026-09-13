@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace HyperfTest\Incubator\Cases\Semaphore;
 
 use Hyperf\Engine\Channel;
+use Hyperf\Incubator\Semaphore\Exception\RuntimeException;
 use Hyperf\Incubator\Semaphore\Exception\SemaphoreException;
 use Hyperf\Incubator\Semaphore\Exception\TimeoutException;
 use Hyperf\Incubator\Semaphore\Semaphore;
@@ -52,20 +53,20 @@ class SemaphoreTest extends TestCase
         $waitersProperty->setAccessible(true);
 
         $waiters = $waitersProperty->getValue($semaphore);
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
 
         $semaphore->acquire(1);
         $waiters = $waitersProperty->getValue($semaphore);
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
 
         $semaphore->release(1);
         $waiters = $waitersProperty->getValue($semaphore);
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
 
         $semaphore->acquire(1);
         $semaphore->acquire(1);
         $waiters = $waitersProperty->getValue($semaphore);
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
     }
 
     public function testSemaphoreWithWaiter()
@@ -86,12 +87,12 @@ class SemaphoreTest extends TestCase
         });
         go(function () use ($semaphore, $waiters) {
             usleep(100 * 1000);
-            $this->assertEquals(1, $waiters->len());
+            $this->assertEquals(1, count($waiters));
             $semaphore->release(1);
         });
         $chan->pop();
 
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
     }
 
     public function testSemaphoreWithWaiters()
@@ -116,15 +117,15 @@ class SemaphoreTest extends TestCase
         });
         go(function () use ($semaphore, $waiters) {
             usleep(100 * 1000);
-            $this->assertEquals(2, $waiters->len());
+            $this->assertEquals(2, count($waiters));
             $semaphore->release(1);
-            $this->assertEquals(1, $waiters->len());
+            $this->assertEquals(1, count($waiters));
             usleep(100 * 1000);
             $semaphore->release(1);
         });
         $chan->pop();
 
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
     }
 
     public function testSemaphoreWithWaitersWithAcquireMoreThanOneToken()
@@ -149,15 +150,15 @@ class SemaphoreTest extends TestCase
         });
         go(function () use ($semaphore, $waiters) {
             usleep(100 * 1000);
-            $this->assertEquals(2, $waiters->len());
+            $this->assertEquals(2, count($waiters));
             $semaphore->release(3);
-            $this->assertEquals(1, $waiters->len());
+            $this->assertEquals(1, count($waiters));
             usleep(100 * 1000);
             $semaphore->release(3);
         });
         $chan->pop();
 
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
     }
 
     public function testAcquireWithTimeout()
@@ -191,12 +192,12 @@ class SemaphoreTest extends TestCase
         });
         go(function () use ($semaphore, $waiters) {
             usleep(100 * 1000);
-            $this->assertEquals(1, $waiters->len());
+            $this->assertEquals(1, count($waiters));
             $semaphore->release(1);
         });
         $chan->pop();
 
-        $this->assertEquals(0, $waiters->len());
+        $this->assertEquals(0, count($waiters));
     }
 
     public function testTryAcquire()
@@ -240,5 +241,73 @@ class SemaphoreTest extends TestCase
 
         $this->assertEquals($num, $acquireTimes);
         $this->assertEquals($num, $releaseTimes);
+    }
+
+    public function testWaitersAreGrantedInFIFOOrder()
+    {
+        $semaphore = new Semaphore(1);
+        $semaphore->acquire(1);
+
+        $granted = new Channel(16);
+        for ($i = 0; $i < 5; ++$i) {
+            go(function () use ($semaphore, $granted, $i) {
+                $semaphore->acquire(1);
+                $granted->push($i);
+                $semaphore->release(1);
+            });
+        }
+
+        // ensure that all coroutines are queued in order
+        usleep(100 * 1000);
+        $semaphore->release(1);
+
+        $order = [];
+        for ($i = 0; $i < 5; ++$i) {
+            $order[] = $granted->pop(1);
+        }
+
+        $this->assertSame(range(0, 4), $order);
+    }
+
+    public function testTimedOutWaiterPassesGrantToSuccessors()
+    {
+        $semaphore = new Semaphore(5);
+        $semaphore->acquire(4);
+
+        $results = new Channel(8);
+        go(function () use ($semaphore, $results) {
+            try {
+                $semaphore->acquire(3, 0.05);
+            } catch (TimeoutException) {
+                $results->push('head-timeout');
+            }
+        });
+        go(function () use ($semaphore, $results) {
+            $semaphore->acquire(1);
+            $results->push('tail-granted');
+            $semaphore->release(1);
+        });
+
+        usleep(200 * 1000);
+
+        $ret = [$results->pop(1), $results->pop(1)];
+        sort($ret);
+        $this->assertSame(['head-timeout', 'tail-granted'], $ret);
+    }
+
+    public function testReleaseMoreThanHeldKeepsStateIntact()
+    {
+        $semaphore = new Semaphore(2);
+        $semaphore->acquire(2);
+
+        try {
+            $semaphore->release(3);
+            $this->fail('RuntimeException expected');
+        } catch (RuntimeException $exception) {
+            $this->assertEquals('Semaphore released more than held', $exception->getMessage());
+        }
+
+        $semaphore->release(2);
+        $this->assertTrue($semaphore->tryAcquire(2));
     }
 }
