@@ -240,18 +240,18 @@ class DoubleBarrierTest extends TestCase
         // A's callback is instant, it must stay waiting for B's slow callback on leave
         go(static function () use ($barrier, $timeChan): void {
             $at = microtime(true);
-            $barrier->execute(static fn (): null => null);
+            $barrier->execute(static fn () => null);
             $timeChan->push(microtime(true) - $at);
         });
         go(static function () use ($barrier): void {
-            $barrier->execute(static fn (): null => usleep(200 * 1000));
+            $barrier->execute(static fn () => usleep(200 * 1000));
         });
 
         // C fails to enter while the others are running, its failure must not skip their leave
         usleep(100 * 1000);
         go(static function () use ($barrier, $resultChan): void {
             try {
-                $barrier->execute(static fn (): null => null);
+                $barrier->execute(static fn () => null);
             } catch (EnterException $e) {
                 $resultChan->push('C:' . $e->getMessage());
             }

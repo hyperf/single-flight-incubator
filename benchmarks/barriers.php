@@ -27,7 +27,7 @@ run(static function (): void {
     for ($w = 0; $w < $waves; ++$w) {
         $key = 'wave_' . $w;
         for ($i = 0; $i < $parties; ++$i) {
-            $callables[] = static fn (): mixed => BarrierManager::counterCall($key, $parties, static fn (): null => null);
+            $callables[] = static fn (): mixed => BarrierManager::counterCall($key, $parties, static fn () => null);
         }
     }
     $at = microtime(true);
@@ -41,7 +41,7 @@ run(static function (): void {
     for ($g = 0; $g < $groups; ++$g) {
         $barrier = new DoubleBarrier($parties);
         for ($i = 0; $i < $parties; ++$i) {
-            $callables[] = static fn (): mixed => $barrier->execute(static fn (): null => null);
+            $callables[] = static fn (): mixed => $barrier->execute(static fn () => null);
         }
     }
     $at = microtime(true);
@@ -54,8 +54,8 @@ run(static function (): void {
     $callables = [];
     for ($i = 0; $i < 2500; ++$i) {
         $key = uniqid();
-        $callables[] = static fn (): mixed => BarrierManager::counterCall($key, 2, static fn (): null => null);
-        $callables[] = static fn (): mixed => BarrierManager::counterCall($key, 2, static fn (): null => null);
+        $callables[] = static fn (): mixed => BarrierManager::counterCall($key, 2, static fn () => null);
+        $callables[] = static fn (): mixed => BarrierManager::counterCall($key, 2, static fn () => null);
     }
     parallel($callables);
     unset($callables);
