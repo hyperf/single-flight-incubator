@@ -18,7 +18,7 @@ use Hyperf\Di\Annotation\AbstractAnnotation;
 #[Attribute(Attribute::TARGET_METHOD)]
 class Semaphore extends AbstractAnnotation
 {
-    public function __construct(public string $key = '', public int $tokens = 1, public int $acquire = 1, public float $timeout = -1)
+    public function __construct(public string $key = '', public int $tokens = 0, public int $acquire = 0, public float $timeout = -1)
     {
     }
 }

@@ -39,6 +39,7 @@ class SemaphoreAspect extends AbstractAspect
 
     private const DELIMITER = 'S@#_!';
 
+    /** @var array<class-string> */
     public array $annotations = [
         Semaphore::class,
     ];
@@ -50,6 +51,7 @@ class SemaphoreAspect extends AbstractAspect
     {
         /** @var Semaphore $annotation */
         $annotation = AnnotationCollector::getClassMethodAnnotation($proceedingJoinPoint->className, $proceedingJoinPoint->methodName)[Semaphore::class] ?? null;
+        // @phpstan-ignore-next-line the annotation key is only guaranteed by the collector at runtime
         if (is_null($annotation)) {
             throw new AnnotationException("Annotation Semaphore couldn't be collected successfully.");
         }
@@ -69,8 +71,8 @@ class SemaphoreAspect extends AbstractAspect
         }
 
         $key = $this->key($annotation->key, $args, Context::key());
-        $tokens = $this->tokens($annotation->tokens, $args[self::ARG_TOKENS] ?? 1, Context::tokens());
-        $acquire = $this->acquire($annotation->acquire, $args[self::ARG_ACQUIRE] ?? 1, Context::acquire());
+        $tokens = $this->tokens($annotation->tokens, $args[self::ARG_TOKENS] ?? 0, Context::tokens());
+        $acquire = $this->acquire($annotation->acquire, $args[self::ARG_ACQUIRE] ?? 0, Context::acquire());
         $timeout = $this->timeout($annotation->timeout, $args[self::ARG_TIMEOUT] ?? -1, Context::timeout());
         $key = $key . self::DELIMITER . $tokens;
 
@@ -91,7 +93,10 @@ class SemaphoreAspect extends AbstractAspect
         }
     }
 
-    private function key(string $key, array $args, $contextKey): string
+    /**
+     * @param array<string, mixed> $args
+     */
+    private function key(string $key, array $args, string $contextKey): string
     {
         if ($value = $key) {
             preg_match_all('/#\{[\w.]+}/', $value, $matches);
@@ -116,13 +121,13 @@ class SemaphoreAspect extends AbstractAspect
 
     private function tokens(int $annoTokens, int $argTokens, int $contextTokens): int
     {
-        if ($annoTokens > 1) {
+        if ($annoTokens > 0) {
             return $annoTokens;
         }
-        if ($argTokens > 1) {
+        if ($argTokens > 0) {
             return $argTokens;
         }
-        if ($contextTokens > 1) {
+        if ($contextTokens > 0) {
             return $contextTokens;
         }
 
@@ -131,13 +136,13 @@ class SemaphoreAspect extends AbstractAspect
 
     private function acquire(int $annoAcquire, int $argAcquire, int $contextAcquire): int
     {
-        if ($annoAcquire > 1) {
+        if ($annoAcquire > 0) {
             return $annoAcquire;
         }
-        if ($argAcquire > 1) {
+        if ($argAcquire > 0) {
             return $argAcquire;
         }
-        if ($contextAcquire > 1) {
+        if ($contextAcquire > 0) {
             return $contextAcquire;
         }
 

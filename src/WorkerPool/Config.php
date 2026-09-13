@@ -83,7 +83,7 @@ class Config
         return $this->gcIntervalMs;
     }
 
-    public function setCollectInactiveWorker(int $gcIntervalMs): self
+    public function setGcIntervalMs(int $gcIntervalMs): self
     {
         $this->gcIntervalMs = $gcIntervalMs;
         return $this;

@@ -17,6 +17,7 @@ use Hyperf\Engine\Channel;
 
 class Task implements TaskInterface
 {
+    /** @var Channel<mixed> */
     private Channel $retChan;
 
     private bool $done = false;

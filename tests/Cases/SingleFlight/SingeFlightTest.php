@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace HyperfTest\Incubator\Cases\SingleFlight;
 
+use Hyperf\Engine\Channel;
 use Hyperf\Incubator\SingleFlight\Exception\RuntimeException;
 use Hyperf\Incubator\SingleFlight\Exception\TimeoutException;
 use Hyperf\Incubator\SingleFlight\SingleFlight;
@@ -171,5 +172,41 @@ class SingeFlightTest extends TestCase
         $this->assertCount($doTimes, $ret);
         $this->assertCount($forgetTimes + 1, array_unique($ret));
         $this->assertEmpty(SingleFlight::list());
+    }
+
+    public function testSingleFlightWithForgetRetryAndLateArrival()
+    {
+        $barrierKey = uniqid();
+        $generations = new Channel(10);
+
+        // the first generation leader runs a long processor
+        go(static function () use ($barrierKey, $generations): void {
+            SingleFlight::do($barrierKey, static function () use ($generations) {
+                $generations->push('g1');
+                usleep(400 * 1000);
+                return 'r1';
+            });
+        });
+        $this->assertSame('g1', $generations->pop());
+
+        // a waiter whose processor runs even longer, it retries into the second generation
+        go(static function () use ($barrierKey, $generations): void {
+            SingleFlight::do($barrierKey, static function () use ($generations) {
+                $generations->push('g2');
+                usleep(800 * 1000);
+                return 'r2';
+            }, 1.0);
+        });
+        usleep(50 * 1000);
+
+        SingleFlight::forget($barrierKey);
+        $this->assertSame('g2', $generations->pop());
+
+        // the first leader finished by now, while the second generation is still running
+        usleep(550 * 1000);
+
+        // the late arrival must wait for the running second generation
+        // instead of leading a third concurrent execution
+        $this->assertSame('r2', SingleFlight::do($barrierKey, static fn () => 'r3', 1.0));
     }
 }

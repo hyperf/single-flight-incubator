@@ -14,6 +14,9 @@ namespace Hyperf\Incubator\DoubleBarrier;
 
 class ConfigProvider
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function __invoke(): array
     {
         return [];

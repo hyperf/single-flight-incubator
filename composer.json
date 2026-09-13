@@ -53,7 +53,7 @@
     "scripts": {
         "test": "co-phpunit -c phpunit.xml --colors=always --display-warnings",
         "cs-fix": "php-cs-fixer fix $1",
-        "analyse": "phpstan analyse --memory-limit 1024M -l 0 ./src"
+        "analyse": "phpstan analyse --memory-limit 1024M -l 8 ./src"
     },
     "extra": {
         "branch-alias": {

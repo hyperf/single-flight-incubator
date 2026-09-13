@@ -14,7 +14,7 @@ namespace Hyperf\Incubator\Barrier;
 
 interface BarrierInterface
 {
-    public function await(float $timeout = -1);
+    public function await(float $timeout = -1): void;
 
     public function broken(): bool;
 

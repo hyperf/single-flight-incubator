@@ -37,7 +37,7 @@ class WorkerPoolManager
         return self::get($name);
     }
 
-    public static function remove($name): void
+    public static function remove(string $name): void
     {
         self::get($name)?->stop();
         unset(self::$container[$name]);

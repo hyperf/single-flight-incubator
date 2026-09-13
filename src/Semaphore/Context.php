@@ -41,7 +41,7 @@ class Context
 
     public static function tokens(): int
     {
-        return HyperfContext::get(self::SEMAPHORE_TOKENS, 1);
+        return HyperfContext::get(self::SEMAPHORE_TOKENS, 0);
     }
 
     public static function withAcquire(int $acquire): int
@@ -51,7 +51,7 @@ class Context
 
     public static function acquire(): int
     {
-        return HyperfContext::get(self::SEMAPHORE_ACQUIRE, 1);
+        return HyperfContext::get(self::SEMAPHORE_ACQUIRE, 0);
     }
 
     public static function withTimeout(float $timeout): float

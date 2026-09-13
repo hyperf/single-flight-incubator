@@ -18,6 +18,7 @@ use Hyperf\Incubator\Semaphore\Annotation\Semaphore;
 use Hyperf\Incubator\Semaphore\Aspect\SemaphoreAspect;
 use Hyperf\Incubator\Semaphore\Context;
 use Hyperf\Incubator\Semaphore\Exception\RuntimeException;
+use Hyperf\Incubator\Semaphore\Exception\TimeoutException;
 use Hyperf\Incubator\Semaphore\SemaphoreManager;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -50,14 +51,15 @@ class AspectTest extends TestCase
         $ret = $method->invoke($aspect, 5, 3, 2);
         $this->assertEquals(5, $ret);
 
+        // an explicit annotation value of 1 wins over the lower levels
         $ret = $method->invoke($aspect, 1, 3, 2);
+        $this->assertEquals(1, $ret);
+
+        $ret = $method->invoke($aspect, 0, 3, 2);
         $this->assertEquals(3, $ret);
 
-        $ret = $method->invoke($aspect, 1, 1, 2);
+        $ret = $method->invoke($aspect, 0, 0, 2);
         $this->assertEquals(2, $ret);
-
-        $ret = $method->invoke($aspect, 1, 1, 1);
-        $this->assertEquals(1, $ret);
 
         $ret = $method->invoke($aspect, 0, 0, 0);
         $this->assertEquals(1, $ret);
@@ -73,14 +75,15 @@ class AspectTest extends TestCase
         $result = $method->invoke($aspect, 3, 2, 4);
         $this->assertEquals(3, $result);
 
+        // an explicit annotation value of 1 wins over the lower levels
         $result = $method->invoke($aspect, 1, 2, 4);
+        $this->assertEquals(1, $result);
+
+        $result = $method->invoke($aspect, 0, 2, 4);
         $this->assertEquals(2, $result);
 
-        $result = $method->invoke($aspect, 1, 1, 4);
+        $result = $method->invoke($aspect, 0, 0, 4);
         $this->assertEquals(4, $result);
-
-        $result = $method->invoke($aspect, 1, 1, 1);
-        $this->assertEquals(1, $result);
 
         $result = $method->invoke($aspect, 0, 0, 0);
         $this->assertEquals(1, $result);
@@ -167,23 +170,6 @@ class AspectTest extends TestCase
 
         $result = $method->invoke($aspect, 'user_#{user.id}_#{action}', $args, '');
         $this->assertEquals('user_123_update', $result);
-    }
-
-    public function testParameterPriorityWithContext()
-    {
-        $aspect = new SemaphoreAspect();
-        $reflection = new ReflectionClass($aspect);
-        $tokensMethod = $reflection->getMethod('tokens');
-        $tokensMethod->setAccessible(true);
-
-        $result = $tokensMethod->invoke($aspect, 5, 1, 10);
-        $this->assertEquals(5, $result);
-
-        $result = $tokensMethod->invoke($aspect, 1, 3, 10);
-        $this->assertEquals(3, $result);
-
-        $result = $tokensMethod->invoke($aspect, 1, 1, 10);
-        $this->assertEquals(10, $result);
     }
 
     public function testSemaphoreKey()
@@ -299,6 +285,138 @@ class AspectTest extends TestCase
         }
         parallel($callables);
 
+        $this->assertEmpty(SemaphoreManager::list());
+        $this->assertEmpty(SemaphoreManager::$refs);
+    }
+
+    public function testManagerRemoveWithConcurrentRefs()
+    {
+        $key = uniqid();
+        $tokens = mt_rand(1, 100);
+
+        $sema1 = SemaphoreManager::getSema($key, $tokens);
+        $sema2 = SemaphoreManager::getSema($key, $tokens);
+        $this->assertSame($sema1, $sema2);
+
+        // concurrent holders keep the entry alive, sharing the same semaphore
+        $this->assertFalse(SemaphoreManager::remove($key));
+        $this->assertSame($sema1, SemaphoreManager::getSema($key, $tokens));
+
+        // the entry is removed only after the last reference is dropped
+        $this->assertFalse(SemaphoreManager::remove($key));
+        $this->assertTrue(SemaphoreManager::remove($key));
+        $this->assertEmpty(SemaphoreManager::list());
+    }
+
+    public function testManagerRefsEvaporateWithSemaphoreLifetime()
+    {
+        $key = uniqid();
+        $sema = SemaphoreManager::getSema($key, 1);
+        $this->assertCount(1, SemaphoreManager::$refs);
+
+        SemaphoreManager::clear();
+        // the semaphore object is still alive, so is the refcount entry
+        $this->assertCount(1, SemaphoreManager::$refs);
+
+        // dropping the last strong reference evicts the WeakMap entry automatically
+        unset($sema);
+        $this->assertEmpty(SemaphoreManager::$refs);
+    }
+
+    public function testManagerDoesNotLeakAcrossCycles()
+    {
+        $cycle = static function (int $rounds): void {
+            for ($i = 0; $i < $rounds; ++$i) {
+                $key = uniqid();
+                $sema = SemaphoreManager::getSema($key, 1);
+                $sema->acquire(1);
+                $sema->release(1);
+                SemaphoreManager::remove($key);
+            }
+        };
+
+        $cycle(100);
+        $this->assertEmpty(SemaphoreManager::list());
+        $this->assertEmpty(SemaphoreManager::$refs);
+        $before = memory_get_usage();
+
+        $cycle(2000);
+        gc_collect_cycles();
+
+        // a real leak would retain one semaphore per cycle, far beyond this bound
+        $this->assertLessThan(256 * 1024, memory_get_usage() - $before);
+        $this->assertEmpty(SemaphoreManager::list());
+        $this->assertEmpty(SemaphoreManager::$refs);
+    }
+
+    public function testManagerStaleRefsDoNotAffectNewGeneration()
+    {
+        $key = uniqid();
+        $stale = SemaphoreManager::getSema($key, 1);
+        $this->assertTrue(SemaphoreManager::remove($key));
+        // the stale object is still held here, so its zero-count entry survives
+        $this->assertSame(0, SemaphoreManager::$refs[$stale]);
+
+        // a new generation takes the key over, with its own refcount
+        $fresh = SemaphoreManager::getSema($key, 1);
+        $this->assertNotSame($stale, $fresh);
+        $this->assertSame(1, SemaphoreManager::$refs[$fresh]);
+
+        // redundant removes never push any count negative
+        $this->assertTrue(SemaphoreManager::remove($key));
+        $this->assertTrue(SemaphoreManager::remove($key));
+        $this->assertSame(0, SemaphoreManager::$refs[$fresh]);
+
+        // entries strictly follow their objects' lifetime
+        unset($fresh);
+        $this->assertCount(1, SemaphoreManager::$refs);
+        unset($stale);
+        $this->assertEmpty(SemaphoreManager::$refs);
+        $this->assertEmpty(SemaphoreManager::list());
+    }
+
+    public function testManagerCleanupWithTimedOutHolders()
+    {
+        $tokens = 2;
+        $key = uniqid();
+        $peak = 0;
+        $active = 0;
+
+        $callables = [];
+        // holders occupy the semaphore longer than the waiters' timeout
+        for ($i = 0; $i < $tokens; ++$i) {
+            $callables[] = static function () use ($key, $tokens, &$peak, &$active) {
+                $sema = SemaphoreManager::getSema($key, $tokens);
+                $sema->acquire(1);
+                ++$active;
+                $peak = max($peak, $active);
+                usleep(200 * 1000);
+                --$active;
+                $sema->release(1);
+                SemaphoreManager::remove($key);
+            };
+        }
+        // waiters queue up, time out, and remove like the aspect does
+        for ($i = 0; $i < 5; ++$i) {
+            $callables[] = static function () use ($key, $tokens, &$peak, &$active) {
+                $sema = SemaphoreManager::getSema($key, $tokens);
+                try {
+                    $sema->acquire(1, 0.05);
+                    ++$active;
+                    $peak = max($peak, $active);
+                    --$active;
+                    $sema->release(1);
+                } catch (TimeoutException) {
+                    // timed out, the aspect skips the release
+                }
+                SemaphoreManager::remove($key);
+            };
+        }
+        parallel($callables);
+
+        // the entry was never duplicated, so the token limit held
+        $this->assertLessThanOrEqual($tokens, $peak);
+        // and the storm left nothing behind
         $this->assertEmpty(SemaphoreManager::list());
         $this->assertEmpty(SemaphoreManager::$refs);
     }
