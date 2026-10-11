@@ -16,9 +16,11 @@ use Hyperf\Incubator\SingleFlight\Caller;
 use Hyperf\Incubator\SingleFlight\Exception\ForgetException;
 use Hyperf\Incubator\SingleFlight\Exception\RuntimeException;
 use Hyperf\Incubator\SingleFlight\Exception\TimeoutException;
+use Hyperf\Incubator\SingleFlight\SingleFlight;
 use HyperfTest\Incubator\Stubs\SingleFlight\FooException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use Throwable;
 
 use function Hyperf\Coroutine\defer;
@@ -187,5 +189,55 @@ class CallerTest extends TestCase
 
         $this->assertCount(1, array_unique($results));
         $this->assertEquals(0, $caller->waiters());
+    }
+
+    public function testChannelIsNotCreatedOnConstruction()
+    {
+        $caller = new Caller(uniqid());
+
+        $rp = new ReflectionProperty(Caller::class, 'channel');
+        $this->assertNull($rp->getValue($caller));
+    }
+
+    public function testLeaderDoesNotCreateChannelWithoutWaiters()
+    {
+        $key = uniqid();
+        $rp = new ReflectionProperty(Caller::class, 'channel');
+
+        SingleFlight::do($key, function () use ($key, $rp) {
+            // while the processor is running, the caller of this generation is
+            // registered in the container: inspect it in place
+            $caller = SingleFlight::get($key);
+            $this->assertInstanceOf(Caller::class, $caller);
+            $this->assertNull($rp->getValue($caller), 'channel must not be allocated when no waiter has blocked');
+
+            return 'foo';
+        });
+    }
+
+    public function testChannelIsCreatedLazilyWhenWaiterBlocks()
+    {
+        $caller = new Caller($key = uniqid());
+        $rp = new ReflectionProperty(Caller::class, 'channel');
+
+        go(function () use ($caller, $rp) {
+            $caller->share(function () use ($caller, $rp): string {
+                // go() runs this coroutine immediately, so yield here to let
+                // the main coroutine reach wait() and block on the channel
+                for ($i = 0; $i < 100 && $caller->waiters() === 0; ++$i) {
+                    usleep(100);
+                }
+                // the main coroutine is now blocked as a waiter: the channel
+                // must have been created by it, and it must be the only waiter
+                $this->assertEquals(1, $caller->waiters());
+                $this->assertNotNull($rp->getValue($caller));
+
+                return 'foo';
+            });
+        });
+
+        // the main coroutine finds done === false, creates the channel
+        // lazily and blocks on it until the leader shares the result
+        $this->assertSame('foo', $caller->wait());
     }
 }
