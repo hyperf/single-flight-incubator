@@ -22,6 +22,7 @@ class CounterBarrier implements BarrierInterface
 
     private bool $broken = false;
 
+    /** @var Channel<mixed> */
     private Channel $channel;
 
     public function __construct(protected int $parties)

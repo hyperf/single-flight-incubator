@@ -29,11 +29,11 @@ class Caller
 
     private bool $forgotten = false;
 
-    private ?Channel $channel;
+    /** @var null|Channel<mixed> */
+    private ?Channel $channel = null;
 
     public function __construct(protected string $barrierKey)
     {
-        $this->channel = new Channel(1);
     }
 
     /**
@@ -68,7 +68,7 @@ class Caller
             return $this->result;
         }
 
-        $ret = $this->channel->pop($timeout);
+        $ret = ($this->channel ??= new Channel(1))->pop($timeout);
 
         if ($ret === false && $this->channel->isTimeout()) {
             throw new TimeoutException(message: "Exceeded maximum waiting time for result on {$this->barrierKey}");
@@ -100,7 +100,7 @@ class Caller
 
     public function waiters(): int
     {
-        return $this->channel->stats()['consumer_num'];
+        return $this->channel === null ? 0 : $this->channel->stats()['consumer_num'];
     }
 
     public function isForgotten(): bool
@@ -110,6 +110,6 @@ class Caller
 
     private function resumeWaiters(): void
     {
-        $this->channel->close();
+        $this->channel?->close();
     }
 }

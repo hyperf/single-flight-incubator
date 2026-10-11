@@ -19,6 +19,13 @@ class SemaphoreManager
 {
     use Container;
 
+    /**
+     * @var null|WeakMap<Semaphore, int>
+     *
+     * Refcount side table keyed by semaphore objects: entries are never
+     * unset manually, they evaporate automatically upon object destruction,
+     * so the table never leaks
+     */
     public static ?WeakMap $refs = null;
 
     public static function getSema(string $key, int $tokens): Semaphore
@@ -26,15 +33,16 @@ class SemaphoreManager
         if (is_null(self::$refs)) {
             self::$refs = new WeakMap();
         }
+        $refs = self::$refs;
 
         if (! self::has($key)) {
             $sema = new Semaphore($tokens);
             self::set($key, $sema);
-            self::$refs[$sema] = 0;
+            $refs[$sema] = 0;
         }
 
         $sema = self::get($key);
-        ++self::$refs[$sema];
+        ++$refs[$sema];
 
         return $sema;
     }
@@ -45,13 +53,14 @@ class SemaphoreManager
         if (is_null($sema) || is_null(self::$refs)) {
             return true;
         }
+        $refs = self::$refs;
 
-        --self::$refs[$sema];
-        if (self::$refs[$sema] <= 0) {
-            unset($sema, self::$container[$key]);
-            return true;
+        if (--$refs[$sema] > 0) {
+            return false;
         }
 
-        return false;
+        unset(self::$container[$key]);
+
+        return true;
     }
 }

@@ -16,6 +16,9 @@ use Hyperf\Incubator\Semaphore\Aspect\SemaphoreAspect;
 
 class ConfigProvider
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function __invoke(): array
     {
         return [

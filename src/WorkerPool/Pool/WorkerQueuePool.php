@@ -12,43 +12,26 @@ declare(strict_types=1);
 
 namespace Hyperf\Incubator\WorkerPool\Pool;
 
-use Hyperf\Incubator\WorkerPool\Exception\RuntimeException;
 use Hyperf\Incubator\WorkerPool\Worker;
+use SplDoublyLinkedList;
+use SplQueue;
 
 class WorkerQueuePool extends AbstractWorkerPool
 {
-    protected function insert(Worker $worker): void
+    /**
+     * @return SplDoublyLinkedList<Worker>
+     */
+    protected function newIdleList(): SplDoublyLinkedList
     {
-        $this->enqueue($worker);
+        return new SplQueue();
     }
 
     protected function detach(): ?Worker
     {
-        return $this->dequeue();
-    }
-
-    private function enqueue(Worker $worker): void
-    {
-        if ($this->len() >= $this->cap) {
-            throw new RuntimeException("Pool capacity exceeded: {$this->cap}");
-        }
-
-        $this->heap->insert($worker);
-
-        $node = $this->pushBack($worker);
-        $worker->setNode($node);
-    }
-
-    private function dequeue(): ?Worker
-    {
-        $front = $this->front();
-        if ($front === null) {
+        if ($this->idle->isEmpty()) {
             return null;
         }
 
-        $worker = $this->remove($front);
-        $this->heap->remove($worker);
-
-        return $worker;
+        return $this->idle->shift();
     }
 }

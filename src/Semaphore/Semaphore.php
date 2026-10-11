@@ -15,17 +15,23 @@ namespace Hyperf\Incubator\Semaphore;
 use Hyperf\Incubator\Semaphore\Exception\RuntimeException;
 use Hyperf\Incubator\Semaphore\Exception\TimeoutException;
 use Hyperf\Incubator\Semaphore\Exception\TokenException;
-use Hyperf\Incubator\Semaphore\List\Queue;
+use SplObjectStorage;
 
 class Semaphore
 {
     private int $current = 0;
 
-    private Queue $waiters;
+    /**
+     * Waiters are granted in the order they are attached, which relies on
+     * the insertion order iteration of SplObjectStorage, and this behavior
+     * is guaranteed by the WaitersAreGrantedInFIFOOrder test case.
+     */
+    /** @var SplObjectStorage<Waiter, null> */
+    private SplObjectStorage $waiters;
 
     public function __construct(protected int $tokens)
     {
-        $this->waiters = new Queue();
+        $this->waiters = new SplObjectStorage();
     }
 
     /**
@@ -41,29 +47,29 @@ class Semaphore
             throw new TokenException('The number of tokens requested exceeds the semaphore size');
         }
 
-        if ($this->tokens - $this->current >= $tokens && $this->waiters->len() == 0) {
+        if ($this->tokens - $this->current >= $tokens && $this->waiters->count() == 0) {
             $this->current += $tokens;
             return;
         }
 
         $waiter = new Waiter($tokens);
-        $node = $this->waiters->enqueue($waiter);
+        $this->waiters->attach($waiter);
 
         try {
             $waiter->wait($timeout);
         } catch (TimeoutException $ex) {
-            $firstNode = $this->waiters->peek();
-            if ($node === $firstNode && $this->tokens > $this->current) {
+            // leave the queue first, then pass the grant chance to the successor waiters
+            $this->waiters->detach($waiter);
+            if ($this->tokens > $this->current) {
                 $this->notifyWaiters();
             }
-            $this->waiters->remove($node);
             throw $ex;
         }
     }
 
     public function tryAcquire(int $tokens): bool
     {
-        if ($this->tokens - $this->current >= $tokens && $this->waiters->len() == 0) {
+        if ($this->tokens - $this->current >= $tokens && $this->waiters->count() == 0) {
             $this->current += $tokens;
             return true;
         }
@@ -73,10 +79,10 @@ class Semaphore
 
     public function release(int $tokens): void
     {
-        $this->current -= $tokens;
-        if ($this->current < 0) {
+        if ($this->current < $tokens) {
             throw new RuntimeException('Semaphore released more than held');
         }
+        $this->current -= $tokens;
 
         $this->notifyWaiters();
     }
@@ -84,20 +90,28 @@ class Semaphore
     private function notifyWaiters(): void
     {
         while (true) {
-            $node = $this->waiters->peek();
-            if (is_null($node)) {
+            $waiter = $this->frontWaiter();
+            if (is_null($waiter)) {
                 break;
             }
 
-            /** @var Waiter $waiter */
-            $waiter = $node->value();
             if ($this->tokens - $this->current < $waiter->tokens()) {
                 break;
             }
 
             $this->current += $waiter->tokens();
-            $this->waiters->remove($node);
+            $this->waiters->detach($waiter);
             $waiter->resume();
         }
+    }
+
+    private function frontWaiter(): ?Waiter
+    {
+        $this->waiters->rewind();
+        if (! $this->waiters->valid()) {
+            return null;
+        }
+
+        return $this->waiters->current();
     }
 }

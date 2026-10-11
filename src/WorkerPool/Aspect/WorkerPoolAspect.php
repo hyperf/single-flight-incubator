@@ -34,6 +34,7 @@ class WorkerPoolAspect extends AbstractAspect
 
     public const ARG_SYNC = 'workerPoolSync';
 
+    /** @var array<class-string> */
     public array $annotations = [
         WorkerPool::class,
     ];
@@ -45,6 +46,7 @@ class WorkerPoolAspect extends AbstractAspect
     {
         /** @var WorkerPool $annotation */
         $annotation = AnnotationCollector::getClassMethodAnnotation($proceedingJoinPoint->className, $proceedingJoinPoint->methodName)[WorkerPool::class] ?? null;
+        // @phpstan-ignore-next-line the annotation key is only guaranteed by the collector at runtime
         if (is_null($annotation)) {
             throw new AnnotationException("Annotation WorkerPool couldn't be collected successfully.");
         }
@@ -73,6 +75,9 @@ class WorkerPoolAspect extends AbstractAspect
         return $task->waitResult();
     }
 
+    /**
+     * @param array<string, mixed> $args
+     */
     private function name(string $annoName, array $args, string $contextName): string
     {
         if ($value = $annoName) {

@@ -16,6 +16,9 @@ use Hyperf\Incubator\SingleFlight\Aspect\SingleFlightAspect;
 
 class ConfigProvider
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function __invoke(): array
     {
         return [

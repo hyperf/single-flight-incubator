@@ -17,15 +17,16 @@ use Hyperf\Incubator\Semaphore\Exception\TimeoutException;
 
 class Waiter
 {
+    /** @var Channel<bool> */
     private Channel $ready;
 
     public function __construct(protected int $token)
     {
+        $this->ready = new Channel(1);
     }
 
     public function wait(float $timeout = -1): void
     {
-        $this->ready = new Channel(1);
         $ret = $this->ready->pop($timeout);
         if ($ret === false && $this->ready->isTimeout()) {
             throw new TimeoutException("Acquire for semaphore timeout for {$this->token} tokens");

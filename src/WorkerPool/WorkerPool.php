@@ -25,20 +25,19 @@ class WorkerPool
 {
     private bool $running = true;
 
+    /** @var null|Channel<mixed> */
     private ?Channel $gcChan = null;
 
-    private ?WorkerPoolInterface $workers;
+    private WorkerPoolInterface $workers;
 
-    public function __construct(protected ?Config $config = null)
+    public function __construct(protected Config $config = new Config())
     {
-        if ($this->config === null) {
-            $this->config = new Config();
-        }
         $this->config->check();
 
         $this->workers = match ($this->config->getPoolType()) {
             Config::QUEUE_POOL => new WorkerQueuePool($this->config->getCapacity(), $this->config->isPreSpawn(), $this->config->getMaxBlocks()),
             Config::STACK_POOL => new WorkerStackPool($this->config->getCapacity(), $this->config->isPreSpawn(), $this->config->getMaxBlocks()),
+            default => throw new RuntimeException('Invalid pool type: ' . $this->config->getPoolType()),
         };
 
         $this->collectWorkers();
@@ -62,6 +61,9 @@ class WorkerPool
         }
 
         $worker = $this->workers->get($timeout);
+        if (is_null($worker)) {
+            throw new RuntimeException('Failed to get worker from the pool');
+        }
 
         $ret = $worker->submit($task);
         if ($ret instanceof WorkerPoolException) {
@@ -82,22 +84,18 @@ class WorkerPool
     {
         if ($this->config->getGcIntervalMs() != -1) {
             $interval = $this->config->getGcIntervalMs();
-            $this->gcChan = new Channel();
-            go(function () use ($interval) {
+            $gcChan = new Channel();
+            $this->gcChan = $gcChan;
+            $workers = $this->workers;
+            go(function () use ($interval, $gcChan, $workers) {
                 $intervalSecond = $interval / 1000.0;
                 while (true) {
-                    if (! $this->running) {
-                        break;
-                    }
-                    $this->gcChan->pop($intervalSecond);
-                    if (! $this->running) {
-                        break;
-                    }
-                    if ($this->gcChan->isTimeout()) {
+                    if ($gcChan->pop($intervalSecond) === false && $gcChan->isTimeout()) {
                         $at = (int) (microtime(true) * 1000) - $interval;
-                        $this->workers->collect($at);
+                        $workers->collect($at);
                         continue;
                     }
+                    // the channel was closed by stop(), time to leave
                     break;
                 }
             });

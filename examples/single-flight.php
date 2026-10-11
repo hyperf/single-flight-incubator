@@ -32,7 +32,7 @@ run(static function () use (&$ret, $barrierKey) {
     }
 });
 
-if (count(array_unique($ret)) === 1) {
+if (count(array_unique(array_map('serialize', $ret))) === 1) {
     $ret = var_export($ret, true);
     printf("%s\n只有一个协程会执行闭包逻辑，其他协程等待其结果进行复用\n", $ret);
 }

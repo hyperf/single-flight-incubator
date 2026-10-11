@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Hyperf\Incubator\DoubleBarrier;
 
 use Hyperf\Engine\Channel;
-use Hyperf\Incubator\DoubleBarrier\Exception\DoubleBarrierException;
 use Hyperf\Incubator\DoubleBarrier\Exception\EnterException;
 use Hyperf\Incubator\DoubleBarrier\Exception\LeaveException;
 use Hyperf\Incubator\DoubleBarrier\Exception\RuntimeException;
@@ -28,61 +27,63 @@ class DoubleBarrier implements DoubleBarrierInterface
 
     private bool $leaving = false;
 
-    private bool $queueFailed = false;
+    private bool $broken = false;
 
     private bool $done = false;
 
+    /** @var Channel<mixed> */
     private Channel $enterChan;
 
+    /** @var Channel<mixed> */
     private Channel $leaveChan;
 
     public function __construct(protected int $parties)
     {
         $this->enterChan = new Channel();
-    }
-
-    public function __destruct()
-    {
-        if (! $this->done) {
-            throw new RuntimeException('DoubleBarrier was not properly leaved before destruction');
-        }
+        $this->leaveChan = new Channel();
     }
 
     /**
-     * @throws DoubleBarrierException
+     * @throws EnterException
      */
     public function enter(float $timeout = -1): void
     {
         if ($this->leaving) {
             throw new EnterException('Cannot enter barrier while in leaving state');
         }
+        if ($this->broken) {
+            throw new EnterException('Cannot enter a broken barrier');
+        }
         if (++$this->inFences == $this->parties) {
             $this->leaving = true;
-            $this->leaveChan = new Channel();
             $this->enterChan->close();
             return;
         }
 
         $ret = $this->enterChan->pop($timeout);
         if ($ret === false && $this->enterChan->isTimeout()) {
-            $this->done = true;
+            // release the fence and break the barrier, so the other waiters fail fast
+            --$this->inFences;
+            $this->broken = true;
+            $this->enterChan->close();
             throw new EnterException(message: 'Timeout while waiting others to enter barrier', previous: new TimeoutException());
+        }
+        // @phpstan-ignore-next-line broken can be set by another party while we wait in pop
+        if ($this->broken) {
+            throw new EnterException(message: 'The barrier was broken by another party', previous: new TimeoutException());
         }
     }
 
     /**
-     * @throws DoubleBarrierException
+     * @throws RuntimeException
      */
     public function execute(callable $callback, float $enterTimeout = -1, float $leaveTimeout = -1): mixed
     {
+        $this->enter($enterTimeout);
+
         try {
-            $this->enter($enterTimeout);
             return call($callback);
         } catch (Throwable $th) {
-            if ($th instanceof DoubleBarrierException) {
-                $this->queueFailed = true;
-                throw $th;
-            }
             throw new RuntimeException(message: 'An exception occurred while executing callback', previous: $th);
         } finally {
             $this->leave($leaveTimeout);
@@ -90,15 +91,15 @@ class DoubleBarrier implements DoubleBarrierInterface
     }
 
     /**
-     * @throws DoubleBarrierException
+     * @throws LeaveException
      */
     public function leave(float $timeout = -1): void
     {
-        if ($this->queueFailed) {
-            return;
-        }
         if (! $this->leaving) {
             throw new LeaveException('Cannot leave barrier before fully entering');
+        }
+        if ($this->broken) {
+            throw new LeaveException(message: 'The barrier was broken by another party', previous: new TimeoutException());
         }
         if ($this->done) {
             throw new LeaveException('Cannot leave barrier that is already done');
@@ -111,7 +112,14 @@ class DoubleBarrier implements DoubleBarrierInterface
 
         $ret = $this->leaveChan->pop($timeout);
         if ($ret === false && $this->leaveChan->isTimeout()) {
+            // break the barrier, so the other leavers fail fast
+            $this->broken = true;
+            $this->leaveChan->close();
             throw new LeaveException(message: 'Timeout while waiting others to leave barrier', previous: new TimeoutException());
+        }
+        // @phpstan-ignore-next-line broken can be set by another party while we wait in pop
+        if ($this->broken) {
+            throw new LeaveException(message: 'The barrier was broken by another party', previous: new TimeoutException());
         }
     }
 }

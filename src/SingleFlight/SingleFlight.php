@@ -26,20 +26,23 @@ class SingleFlight
      */
     public static function do(string $barrierKey, callable $processor, float $timeout = -1): mixed
     {
-        if (! self::has($barrierKey) || self::get($barrierKey)?->isForgotten()) {
+        $caller = self::get($barrierKey);
+        if (is_null($caller) || $caller->isForgotten()) {
             $caller = new Caller($barrierKey);
             self::set($barrierKey, $caller);
             try {
                 return $caller->share($processor);
             } finally {
-                if (self::get($barrierKey)?->waiters() === 0) {
+                // remove the entry only when it is still this caller: after a forget
+                // retry, a newer generation may already be running on the same key
+                if (self::get($barrierKey) === $caller && $caller->waiters() === 0) {
                     unset(self::$container[$barrierKey]);
                 }
             }
         }
 
         try {
-            return self::get($barrierKey)->wait($timeout);
+            return $caller->wait($timeout);
         } catch (SingleFlightException $exception) {
             if ($exception instanceof ForgetException) {
                 return self::do($barrierKey, $processor, $timeout);
